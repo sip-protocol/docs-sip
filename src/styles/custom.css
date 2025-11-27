@@ -1,8 +1,16 @@
-/* SIP Protocol brand colors */
+/* SIP Protocol brand colors - matching sip-protocol.org */
 :root {
-  --sl-color-accent-low: #1a1f35;
-  --sl-color-accent: #6366f1;
-  --sl-color-accent-high: #a5b4fc;
+  /* Dark theme (default) - Purple accent from website */
+  --sl-color-accent-low: #4c1d95;    /* sip-purple-900 */
+  --sl-color-accent: #8b5cf6;        /* sip-purple-500 */
+  --sl-color-accent-high: #ede9fe;   /* sip-purple-100 */
+
+  /* Background - dark slate matching website */
+  --sl-color-bg: #0f0f1a;
+  --sl-color-bg-nav: #0f0f1a;
+  --sl-color-bg-sidebar: #0f0f1a;
+
+  /* Grays */
   --sl-color-white: #ffffff;
   --sl-color-gray-1: #eceef2;
   --sl-color-gray-2: #c0c2c7;
@@ -14,17 +22,29 @@
 }
 
 :root[data-theme='light'] {
-  --sl-color-accent-low: #e0e7ff;
-  --sl-color-accent: #4f46e5;
-  --sl-color-accent-high: #312e81;
+  --sl-color-accent-low: #f5f3ff;    /* sip-purple-50 */
+  --sl-color-accent: #7c3aed;        /* sip-purple-600 */
+  --sl-color-accent-high: #4c1d95;   /* sip-purple-900 */
 }
 
 /* Code block styling */
 .sl-markdown-content pre {
   border-radius: 0.5rem;
+  border: 1px solid #353841;
 }
 
-/* Improve table readability */
+/* Table readability */
 .sl-markdown-content table {
   font-size: 0.9rem;
+}
+
+/* Links - purple accent */
+a:hover {
+  color: #8b5cf6;
+}
+
+/* Success/shield indicators - green accent */
+.sl-badge-success, .sl-badge-note {
+  --sl-color-bg-badge: #22c55e20;
+  --sl-color-border-badge: #22c55e;
 }
