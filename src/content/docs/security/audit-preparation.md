@@ -62,7 +62,7 @@ This document outlines the security audit preparation for SIP Protocol.
 - [x] Keys validated on import
 - [x] Separate spending and viewing keys
 - [x] Key derivation uses HKDF
-- [ ] Secure memory clearing (partial - JS limitation)
+- [x] Secure memory clearing via `secureWipe()`, `withSecureBuffer()`
 
 ### Input Validation
 
@@ -195,7 +195,11 @@ For audit coordination:
 
 | Date | Auditor | Scope | Status |
 |------|---------|-------|--------|
-| TBD | TBD | Full SDK | Planned |
+| Q1 2025 | Pending Selection | Full SDK + Circuits | Planned |
+
+:::note
+Audit scheduling in progress. For audit inquiries, contact security@sip-protocol.org
+:::
 
 ## Post-Audit Actions
 

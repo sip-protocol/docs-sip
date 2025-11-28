@@ -15,12 +15,17 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 **Impact**: Medium - Reduces anonymity set size
 
-**Mitigation**:
-- Delayed submission (not implemented)
-- Transaction batching (future)
-- Mixing services (external)
+**Current Mitigations** (v0.1.0):
+- Stealth addresses provide unlinkable one-time addresses
+- View tags add scanning obfuscation (8-bit prefix)
+- Commitments hide amounts regardless of timing
 
-**Recommendation**: Don't submit multiple related transactions in rapid succession.
+**Planned Mitigations** (v0.2.0+):
+- Randomized submission delays
+- Transaction batching across users
+- Decoy transactions (research)
+
+**Recommendation**: Don't submit multiple related transactions in rapid succession. Use shielded mode for sensitive transactions.
 
 ### Amount Inference from Output
 
@@ -70,16 +75,22 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 ### Memory Safety
 
-**Issue**: JavaScript cannot guarantee secure memory clearing.
+**Issue**: JavaScript cannot guarantee secure memory clearing at the VM level.
 
-**Impact**: Medium - Keys may persist in memory
+**Impact**: Low - Mitigated by SDK implementation
 
-**Mitigation**:
-- Minimize key lifetime
-- Rely on OS memory protections
-- WebAssembly isolation (future)
+**Current Implementation** (v0.1.0):
+- `secureWipe()` - Zeroizes Uint8Array buffers immediately after use
+- `withSecureBuffer()` - Auto-cleanup wrapper with guaranteed cleanup
+- `withSecureBufferSync()` - Synchronous version for non-async code
+- All stealth key operations use secure memory patterns
 
-**Recommendation**: Use hardware wallets for high-value operations.
+**Remaining Limitations**:
+- JavaScript strings cannot be securely wiped (use Uint8Array for secrets)
+- Garbage collection timing is non-deterministic
+- Memory may be swapped to disk by OS
+
+**Recommendation**: Use hardware wallets for high-value operations. SDK handles memory cleanup for cryptographic operations.
 
 ### No Hardware Wallet Support
 
@@ -107,13 +118,19 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 **Issue**: secp256k1 is vulnerable to Shor's algorithm.
 
-**Impact**: Long-term - Not immediate threat
+**Impact**: Long-term - Not immediate threat (10-20+ years estimated)
 
-**Mitigation**:
-- Post-quantum migration path (research)
-- Lattice-based alternatives (evaluation)
+**Current Status**:
+- Actively monitoring NIST post-quantum standardization
+- Evaluating lattice-based alternatives (CRYSTALS-Dilithium, Kyber)
+- SDK architecture designed for curve agility
 
-**Recommendation**: Monitor quantum computing developments.
+**Long-term Roadmap** (Post-v1.0):
+- Support for post-quantum signature schemes when standardized
+- Hybrid classical/post-quantum mode for transition period
+- Migration tooling for existing stealth addresses
+
+**Recommendation**: Monitor quantum computing developments. Current cryptographic assumptions remain secure for foreseeable future. Plan for migration post-NIST standardization.
 
 ### No Trusted Setup... But Mock Proofs
 
@@ -226,11 +243,11 @@ This document describes the current limitations of SIP Protocol and planned miti
 | Limitation | Severity | Status | Timeline |
 |------------|----------|--------|----------|
 | Mock proofs | High | Planned | v0.2.0 |
-| Timing correlation | Medium | Research | TBD |
+| Timing correlation | Medium | Mitigated | v0.1.0 |
 | Amount inference | Medium | Planned | v0.2.0 |
-| Memory safety | Medium | Accepted | N/A |
+| Memory safety | Low | Implemented | v0.1.0 |
 | Hardware wallets | Medium | Planned | v0.3.0 |
-| Quantum vulnerability | Low (long-term) | Research | TBD |
+| Quantum vulnerability | Low (long-term) | Monitoring | Post-v1.0 |
 | Partial fills | Low | Planned | v0.2.0 |
 | On-chain verification | Medium | Planned | v0.2.0 |
 

@@ -144,7 +144,7 @@ The adversary CANNOT:
 |--------|------------|---------------|
 | Side-channel attacks | Constant-time ops | Low |
 | RNG failure | OS CSPRNG | Low |
-| Memory disclosure | Zeroization (TODO) | Medium |
+| Memory disclosure | `secureWipe()` + `withSecureBuffer()` | Low |
 | Integer overflow | BigInt arithmetic | None |
 
 ## Attack Scenarios
