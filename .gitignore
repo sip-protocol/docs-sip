@@ -3,6 +3,9 @@ dist/
 # generated types
 .astro/
 
+# Generated API docs (regenerated on build from @sip-protocol/sdk)
+src/content/docs/reference/
+
 # dependencies
 node_modules/
 

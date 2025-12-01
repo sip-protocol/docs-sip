@@ -1,0 +1,136 @@
+name: Scheduled API Docs Sync
+
+on:
+  schedule:
+    # Every day at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force rebuild even if SDK version unchanged'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  check-sdk-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_rebuild: ${{ steps.check.outputs.should_rebuild }}
+      current_version: ${{ steps.check.outputs.current_version }}
+      latest_version: ${{ steps.check.outputs.latest_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if SDK version changed
+        id: check
+        run: |
+          # Get current version from package.json (strip ^ prefix if present)
+          CURRENT=$(cat package.json | jq -r '.devDependencies["@sip-protocol/sdk"]' | sed 's/^\^//')
+
+          # Get latest version from npm
+          LATEST=$(npm view @sip-protocol/sdk version 2>/dev/null || echo "0.0.0")
+
+          echo "current_version=$CURRENT" >> $GITHUB_OUTPUT
+          echo "latest_version=$LATEST" >> $GITHUB_OUTPUT
+
+          echo "📦 Current SDK version in package.json: $CURRENT"
+          echo "📦 Latest SDK version on npm: $LATEST"
+
+          # Check if versions differ or force rebuild requested
+          if [ "$CURRENT" != "$LATEST" ] || [ "${{ inputs.force }}" == "true" ]; then
+            echo "should_rebuild=true" >> $GITHUB_OUTPUT
+            echo "✅ Rebuild needed"
+          else
+            echo "should_rebuild=false" >> $GITHUB_OUTPUT
+            echo "⏭️ No rebuild needed - versions match"
+          fi
+
+  rebuild-and-deploy:
+    needs: check-sdk-version
+    if: needs.check-sdk-version.outputs.should_rebuild == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: sip-protocol/docs-sip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Update SDK version in package.json
+        run: |
+          LATEST=${{ needs.check-sdk-version.outputs.latest_version }}
+          echo "📦 Updating @sip-protocol/sdk to $LATEST"
+
+          # Update package.json with new version
+          npm install @sip-protocol/sdk@$LATEST @sip-protocol/types@latest --save-dev
+
+          # Commit the version bump
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git diff --staged --quiet || git commit -m "chore: bump @sip-protocol/sdk to $LATEST"
+          git push
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=sdk-${{ needs.check-sdk-version.outputs.latest_version }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: sip
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/app
+            docker pull ghcr.io/sip-protocol/docs-sip:latest
+            docker compose up -d docs
+            docker image prune -f
+            echo "✅ Deployed docs with SDK ${{ needs.check-sdk-version.outputs.latest_version }}"
+
+  notify-skip:
+    needs: check-sdk-version
+    if: needs.check-sdk-version.outputs.should_rebuild == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log skip reason
+        run: |
+          echo "⏭️ Skipping rebuild - SDK version unchanged"
+          echo "📦 Current version: ${{ needs.check-sdk-version.outputs.current_version }}"
+          echo "📦 Latest version: ${{ needs.check-sdk-version.outputs.latest_version }}"

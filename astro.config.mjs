@@ -83,6 +83,11 @@ export default defineConfig({
             { label: 'Whitepaper', slug: 'whitepaper' },
           ],
         },
+        {
+          label: 'API Reference',
+          collapsed: true,
+          autogenerate: { directory: 'reference' },
+        },
       ],
       head: [
         {
