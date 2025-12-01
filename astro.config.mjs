@@ -67,6 +67,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { label: 'NEAR Intents', slug: 'integrations/near-intents' },
+            { label: 'Zcash Integration', slug: 'integrations/zcash' },
             { label: 'Zcash Evaluation', slug: 'integrations/zcash-evaluation' },
           ],
         },
