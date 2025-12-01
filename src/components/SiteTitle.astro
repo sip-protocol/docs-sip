@@ -1,0 +1,74 @@
+---
+/**
+ * Custom SiteTitle component with SDK version badge
+ *
+ * Extends default Starlight SiteTitle to show current SDK version
+ * This helps users know which SDK version the docs cover
+ */
+import type { Props } from '@astrojs/starlight/props'
+import Default from '@astrojs/starlight/components/SiteTitle.astro'
+
+// SDK version - update this when SDK version changes
+const SDK_VERSION = '0.1.9'
+---
+
+<div class="site-title-wrapper">
+  <Default {...Astro.props}><slot /></Default>
+  <a
+    href="https://www.npmjs.com/package/@sip-protocol/sdk"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="sdk-version-badge"
+    title="View @sip-protocol/sdk on npm"
+  >
+    SDK v{SDK_VERSION}
+  </a>
+</div>
+
+<style>
+  .site-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .sdk-version-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #a78bfa;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 9999px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .sdk-version-badge:hover {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #c4b5fd;
+  }
+
+  /* Light theme adjustments */
+  :root[data-theme='light'] .sdk-version-badge {
+    color: #7c3aed;
+    background: rgba(124, 58, 237, 0.1);
+    border-color: rgba(124, 58, 237, 0.3);
+  }
+
+  :root[data-theme='light'] .sdk-version-badge:hover {
+    background: rgba(124, 58, 237, 0.2);
+    border-color: rgba(124, 58, 237, 0.5);
+  }
+
+  /* Responsive: hide on very small screens */
+  @media (max-width: 400px) {
+    .sdk-version-badge {
+      display: none;
+    }
+  }
+</style>

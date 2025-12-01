@@ -14,6 +14,10 @@ export default defineConfig({
         dark: './src/assets/logo-dark.svg',
         replacesTitle: false,
       },
+      components: {
+        // Custom SiteTitle with SDK version badge
+        SiteTitle: './src/components/SiteTitle.astro',
+      },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/sip-protocol' },
         { icon: 'x.com', label: 'Twitter', href: 'https://x.com/rz1989sol' },
