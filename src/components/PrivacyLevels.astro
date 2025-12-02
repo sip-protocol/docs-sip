@@ -211,6 +211,7 @@
   .visibility-grid {
     display: flex;
     justify-content: center;
+    align-items: stretch;
     gap: 1rem;
     margin-bottom: 1rem;
   }
@@ -219,12 +220,14 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
     padding: 1.25rem 1.5rem;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 0.75rem;
-    min-width: 100px;
+    width: 110px;
+    flex-shrink: 0;
   }
 
   .vis-item.visible {
