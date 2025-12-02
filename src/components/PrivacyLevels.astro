@@ -172,8 +172,8 @@
     font-size: 0.9rem;
     font-weight: 500;
     color: var(--sl-color-gray-3);
-    background: transparent;
-    border: none;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
     border-radius: 0.5rem;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -181,10 +181,12 @@
 
   .level-tab:hover {
     color: var(--sl-color-gray-2);
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .level-tab.active {
     background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.3);
     color: #c4b5fd;
   }
 
@@ -211,7 +213,6 @@
   .visibility-grid {
     display: flex;
     justify-content: center;
-    align-items: stretch;
     gap: 1rem;
     margin-bottom: 1rem;
   }
@@ -227,7 +228,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 0.75rem;
     width: 110px;
-    flex-shrink: 0;
+    height: 110px;
   }
 
   .vis-item.visible {
