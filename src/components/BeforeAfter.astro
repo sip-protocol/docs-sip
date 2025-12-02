@@ -82,7 +82,7 @@
 
   .comparison-grid {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
     gap: 2rem;
     max-width: 900px;
@@ -92,6 +92,8 @@
   .comparison-card {
     flex: 1;
     max-width: 320px;
+    display: flex;
+    flex-direction: column;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 1rem;
@@ -135,6 +137,7 @@
 
   .card-content {
     padding: 1.5rem;
+    flex: 1;
   }
 
   .tx-row {
@@ -190,6 +193,7 @@
     font-size: 2rem;
     color: var(--sl-color-gray-4);
     flex-shrink: 0;
+    align-self: center;
   }
 
   /* Light theme */
