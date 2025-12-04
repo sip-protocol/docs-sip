@@ -32,10 +32,38 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Check for broken links
+        uses: lycheeverse/lychee-action@v1
+        with:
+          args: --verbose --no-progress './dist/**/*.html'
+          fail: true
+        continue-on-error: true  # Don't fail build, just warn
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "❌ docs-sip CI failed on ${{ github.ref }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *docs-sip CI Failed*\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Author:* ${{ github.actor }}\n*Workflow:* Deploy to GitHub Pages"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        # Note: Requires SLACK_WEBHOOK_URL secret to be configured in repository settings
 
   deploy:
     environment:
