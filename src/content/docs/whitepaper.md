@@ -228,8 +228,8 @@ All libraries are Trail of Bits audited with constant-time implementations.
 SIP demonstrates practical privacy for cross-chain transactions through established cryptographic primitives at the application layer.
 
 **Current status**:
-- 1,293 passing tests
-- Production-ready SDK
+- ![CI](https://github.com/sip-protocol/sip-protocol/actions/workflows/ci.yml/badge.svg) All tests passing
+- Production-ready SDK (![npm version](https://img.shields.io/npm/v/@sip-protocol/sdk))
 - Audited dependencies
 
 **Future work**:

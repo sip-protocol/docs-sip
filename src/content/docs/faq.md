@@ -277,7 +277,7 @@ Testnet uses:
 Not yet. We are actively preparing for audit:
 
 - Internal review complete
-- Test coverage: 1,293+ tests
+- ![CI](https://github.com/sip-protocol/sip-protocol/actions/workflows/ci.yml/badge.svg) Comprehensive test coverage
 - Threat model documented
 - Seeking qualified auditors
 

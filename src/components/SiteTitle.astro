@@ -8,8 +8,6 @@
 import type { Props } from '@astrojs/starlight/props'
 import Default from '@astrojs/starlight/components/SiteTitle.astro'
 
-// SDK version - update this when SDK version changes
-const SDK_VERSION = '0.1.9'
 ---
 
 <div class="site-title-wrapper">
@@ -21,7 +19,7 @@ const SDK_VERSION = '0.1.9'
     class="sdk-version-badge"
     title="View @sip-protocol/sdk on npm"
   >
-    SDK v{SDK_VERSION}
+    <img src="https://img.shields.io/npm/v/@sip-protocol/sdk?style=flat&label=SDK&color=8b5cf6" alt="SDK Version" style="height: 1.2em; vertical-align: middle;" />
   </a>
 </div>
 

@@ -11,7 +11,8 @@ SIP Protocol is building the **privacy standard for Web3** — like HTTPS for th
 
 - **Phase**: 3 of 4 Complete (Foundation → Standard → Ecosystem)
 - **Progress**: M15 Complete
-- **Tests**: 2,757 passing (SDK: 2,474, React: 57, CLI: 33, API: 67, Website: 126)
+- **SDK Version**: ![npm version](https://img.shields.io/npm/v/@sip-protocol/sdk)
+- **Build Status**: ![CI](https://github.com/sip-protocol/sip-protocol/actions/workflows/ci.yml/badge.svg)
 - **Packages**: 6 (@sip-protocol/sdk, types, react, cli, api + website)
 - **Chains**: 15+ supported
 - **Live**: [sip-protocol.org](https://sip-protocol.org)
