@@ -1,0 +1,863 @@
+---
+title: Error Handling
+description: Error handling patterns, recovery strategies, and debugging in SIP SDK
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This guide covers error handling patterns in the SIP SDK, including error types, recovery strategies, debugging tips, and solutions to common issues.
+
+## Error Hierarchy
+
+All SIP errors extend the base `SIPError` class, which provides machine-readable error codes, debugging context, and cause preservation.
+
+### Base Error Class
+
+```typescript
+import { SIPError, ErrorCode, isSIPError } from '@sip-protocol/sdk'
+
+try {
+  await sip.execute(intent, quote)
+} catch (e) {
+  if (isSIPError(e)) {
+    console.log(`Error ${e.code}: ${e.message}`)
+    console.log('Context:', e.context)
+    if (e.cause) console.log('Caused by:', e.cause)
+  }
+}
+```
+
+All SIP errors include:
+- **`code`**: Machine-readable error code (e.g., `SIP_2001`)
+- **`message`**: Human-readable description
+- **`context`**: Additional debugging information
+- **`cause`**: Original error if wrapped
+- **`timestamp`**: When the error occurred
+
+### Error Types
+
+| Error Class | Description | Use Case |
+|------------|-------------|----------|
+| `ValidationError` | Input validation failures | Invalid amounts, chains, addresses |
+| `CryptoError` | Cryptographic operation failures | Encryption, decryption, commitments |
+| `ProofError` | ZK proof operation failures | Proof generation, verification |
+| `IntentError` | Intent lifecycle errors | Expired intents, invalid state |
+| `NetworkError` | External service failures | RPC calls, API requests |
+| `WalletError` | Wallet interaction failures | Connection, signing, transactions |
+
+## Error Codes Reference
+
+### General (1xxx)
+
+| Code | Description | When It Occurs |
+|------|-------------|---------------|
+| `SIP_1000` | Unknown error | Unexpected failures |
+| `SIP_1001` | Internal error | SDK internal failures |
+| `SIP_1002` | Not implemented | Feature not available |
+
+### Validation (2xxx)
+
+| Code | Description | Recovery |
+|------|-------------|----------|
+| `SIP_2000` | Validation failed | Check input parameters |
+| `SIP_2001` | Invalid input | Verify data format and type |
+| `SIP_2002` | Invalid chain | Use supported chain ID |
+| `SIP_2003` | Invalid privacy level | Use: `transparent`, `shielded`, or `compliant` |
+| `SIP_2004` | Invalid amount | Ensure positive bigint value |
+| `SIP_2005` | Invalid hex string | Check hex format (0x prefix) |
+| `SIP_2006` | Invalid key | Verify key length and format |
+| `SIP_2007` | Invalid address | Check address format for chain |
+| `SIP_2008` | Missing required field | Provide all required parameters |
+| `SIP_2009` | Value out of range | Check min/max constraints |
+
+**Example:**
+```typescript
+try {
+  const intent = sip.intent()
+    .input('invalid_chain', 'SOL', 100n) // ❌ Invalid chain
+} catch (e) {
+  if (hasErrorCode(e, ErrorCode.INVALID_CHAIN)) {
+    // Retry with valid chain
+    const intent = sip.intent()
+      .input('solana', 'SOL', 100n) // ✅ Valid
+  }
+}
+```
+
+### Cryptographic (3xxx)
+
+| Code | Description | Recovery |
+|------|-------------|----------|
+| `SIP_3000` | Crypto operation failed | Retry or check inputs |
+| `SIP_3001` | Encryption failed | Verify key and data |
+| `SIP_3002` | Decryption failed | Check key matches encryption key |
+| `SIP_3003` | Key derivation failed | Verify seed/path parameters |
+| `SIP_3004` | Commitment failed | Check value and blinding |
+| `SIP_3005` | Signature failed | Verify signing key |
+| `SIP_3006` | Invalid curve point | Check point coordinates |
+| `SIP_3007` | Invalid scalar | Verify scalar is in valid range |
+| `SIP_3008` | Invalid key size | Check key is 32 bytes |
+| `SIP_3009` | Invalid encrypted data | Verify ciphertext integrity |
+| `SIP_3010` | Invalid commitment | Check commitment format |
+
+**Example:**
+```typescript
+import { generateViewingKey, encryptForViewing, decryptWithViewing, CryptoError } from '@sip-protocol/sdk'
+
+const viewingKey = generateViewingKey('/compliance/auditor')
+const data = { sender: '0x...', amount: '100', timestamp: Date.now() }
+
+try {
+  const encrypted = encryptForViewing(data, viewingKey)
+  const decrypted = decryptWithViewing(encrypted, viewingKey)
+} catch (e) {
+  if (e instanceof CryptoError) {
+    console.error('Crypto operation failed:', e.operation, e.code)
+    // Check if ciphertext was corrupted
+    // Verify viewing key is correct
+  }
+}
+```
+
+### Proof (4xxx)
+
+| Code | Description | Recovery |
+|------|-------------|----------|
+| `SIP_4000` | Proof operation failed | Check inputs and retry |
+| `SIP_4001` | Proof generation failed | Verify proof parameters |
+| `SIP_4002` | Proof verification failed | Check proof and public inputs |
+| `SIP_4003` | Proof not implemented | Use mock provider or wait for implementation |
+| `SIP_4004` | Proof provider not ready | Call `provider.initialize()` first |
+| `SIP_4005` | Invalid proof params | Verify all required fields |
+
+**Example:**
+```typescript
+import { NoirProofProvider } from '@sip-protocol/sdk'
+
+const provider = new NoirProofProvider({ wasmPath: '/noir' })
+
+try {
+  // ❌ Provider not initialized
+  await provider.generateFundingProof(params)
+} catch (e) {
+  if (hasErrorCode(e, ErrorCode.PROOF_PROVIDER_NOT_READY)) {
+    // ✅ Initialize first
+    await provider.initialize()
+    const result = await provider.generateFundingProof(params)
+  }
+}
+```
+
+### Intent (5xxx)
+
+| Code | Description | Recovery |
+|------|-------------|----------|
+| `SIP_5000` | Intent operation failed | Check intent state and retry |
+| `SIP_5001` | Intent expired | Create new intent with longer TTL |
+| `SIP_5002` | Intent cancelled | Cannot recover, create new intent |
+| `SIP_5003` | Intent not found | Verify intent ID |
+| `SIP_5004` | Invalid intent state | Check intent lifecycle |
+| `SIP_5005` | Proofs required | Generate required proofs |
+| `SIP_5006` | Quote expired | Request new quote |
+
+**Example:**
+```typescript
+import { isExpired } from '@sip-protocol/sdk'
+
+const intent = await sip.intent()
+  .input('solana', 'SOL', 1_000_000_000n)
+  .output('zcash', 'ZEC', 50_000_000n)
+  .ttl(300) // 5 minutes
+  .build()
+
+// Before execution, check expiry
+if (isExpired(intent)) {
+  throw new IntentError('Intent expired', ErrorCode.INTENT_EXPIRED, {
+    context: {
+      expiry: intent.expiry,
+      now: Math.floor(Date.now() / 1000)
+    }
+  })
+}
+```
+
+### Network (6xxx)
+
+| Code | Description | Recovery |
+|------|-------------|----------|
+| `SIP_6000` | Network operation failed | Check connectivity and retry |
+| `SIP_6001` | Network timeout | Increase timeout or check connection |
+| `SIP_6002` | Network unavailable | Wait and retry with backoff |
+| `SIP_6003` | RPC error | Check RPC endpoint and params |
+| `SIP_6004` | API error | Check API credentials and quota |
+| `SIP_6005` | Rate limited | Wait before retrying |
+
+**Example:**
+```typescript
+async function executeWithRetry(intent: ShieldedIntent, quote: Quote, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await sip.execute(intent, quote)
+    } catch (e) {
+      if (e instanceof NetworkError) {
+        if (hasErrorCode(e, ErrorCode.RATE_LIMITED)) {
+          // Exponential backoff
+          await delay(1000 * Math.pow(2, i))
+          continue
+        }
+        if (hasErrorCode(e, ErrorCode.NETWORK_TIMEOUT)) {
+          // Just retry
+          continue
+        }
+      }
+      throw e
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+```
+
+### Wallet (7xxx)
+
+| Code | Value | Description | Recovery |
+|------|-------|-------------|----------|
+| `SIP_7000` | `WALLET_UNKNOWN_ERROR` | Generic wallet error | Check wallet state |
+| `SIP_7001` | `WALLET_NOT_CONNECTED` | Wallet not connected | Call `wallet.connect()` |
+| `SIP_7002` | `WALLET_CONNECTION_FAILED` | Connection failed | Check wallet installation |
+| `SIP_7003` | `WALLET_SIGNING_FAILED` | Signing failed | Retry signing |
+| `SIP_7004` | `WALLET_TRANSACTION_FAILED` | Transaction failed | Check gas and balance |
+
+#### Wallet-Specific Error Codes
+
+The `WalletError` class includes additional wallet-specific codes:
+
+| Code | Description | Recovery |
+|------|-------------|----------|
+| `WALLET_NOT_INSTALLED` | Wallet extension not found | Install wallet browser extension |
+| `WALLET_CONNECTION_REJECTED` | User rejected connection | Ask user to approve |
+| `WALLET_SIGNING_REJECTED` | User rejected signing | Ask user to approve |
+| `WALLET_TRANSACTION_REJECTED` | User rejected transaction | Ask user to approve |
+| `WALLET_INSUFFICIENT_FUNDS` | Not enough balance | Add funds to wallet |
+| `WALLET_UNSUPPORTED_CHAIN` | Chain not supported | Switch to supported chain |
+| `WALLET_CHAIN_SWITCH_REJECTED` | User rejected chain switch | Ask user to approve |
+| `WALLET_STEALTH_NOT_SUPPORTED` | Stealth addresses not supported | Use different wallet |
+| `WALLET_VIEWING_KEY_NOT_SUPPORTED` | Viewing keys not supported | Use different wallet |
+
+**Example:**
+```typescript
+import { WalletError } from '@sip-protocol/sdk'
+
+try {
+  await wallet.connect()
+  const signature = await wallet.signMessage(message)
+} catch (e) {
+  if (e instanceof WalletError) {
+    if (e.isConnectionError()) {
+      // Handle connection errors
+      console.error('Connection failed:', e.walletCode)
+    }
+    if (e.isUserRejection()) {
+      // User rejected - don't retry automatically
+      console.log('User rejected the request')
+    }
+    if (e.isPrivacyError()) {
+      // Privacy features not supported
+      console.log('Wallet does not support privacy features')
+    }
+  }
+}
+```
+
+## Recovery Strategies
+
+### Retry with Exponential Backoff
+
+For transient network errors:
+
+```typescript
+async function withExponentialBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 5,
+  baseDelay = 1000
+): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if (i === maxRetries - 1) throw e
+
+      if (e instanceof NetworkError) {
+        const delay = baseDelay * Math.pow(2, i)
+        const jitter = Math.random() * 1000
+        await sleep(delay + jitter)
+        continue
+      }
+
+      throw e // Non-retryable error
+    }
+  }
+  throw new Error('Unreachable')
+}
+
+// Usage
+const quotes = await withExponentialBackoff(() => sip.getQuotes(intent))
+```
+
+### Fallback to Alternative Provider
+
+For proof generation failures:
+
+```typescript
+const providers = [
+  new NoirProofProvider({ wasmPath: '/noir' }),
+  new MockProofProvider(), // Fallback for testing
+]
+
+async function generateProofWithFallback(params: FundingProofParams) {
+  for (const provider of providers) {
+    try {
+      await provider.initialize()
+      return await provider.generateFundingProof(params)
+    } catch (e) {
+      console.warn(`Provider ${provider.constructor.name} failed:`, e)
+      continue
+    }
+  }
+  throw new ProofError('All proof providers failed', ErrorCode.PROOF_GENERATION_FAILED)
+}
+```
+
+### Circuit Breaker Pattern
+
+Prevent cascading failures:
+
+```typescript
+class CircuitBreaker {
+  private failures = 0
+  private lastFailTime = 0
+  private readonly threshold = 5
+  private readonly timeout = 60000 // 1 minute
+
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.isOpen()) {
+      throw new NetworkError('Circuit breaker open', ErrorCode.NETWORK_UNAVAILABLE)
+    }
+
+    try {
+      const result = await fn()
+      this.reset()
+      return result
+    } catch (e) {
+      this.recordFailure()
+      throw e
+    }
+  }
+
+  private isOpen(): boolean {
+    if (this.failures >= this.threshold) {
+      if (Date.now() - this.lastFailTime < this.timeout) {
+        return true
+      }
+      this.reset()
+    }
+    return false
+  }
+
+  private recordFailure() {
+    this.failures++
+    this.lastFailTime = Date.now()
+  }
+
+  private reset() {
+    this.failures = 0
+  }
+}
+
+const breaker = new CircuitBreaker()
+const result = await breaker.execute(() => sip.execute(intent, quote))
+```
+
+### Graceful Degradation
+
+For optional features:
+
+```typescript
+async function createIntent(withProofs = true) {
+  const builder = sip.intent()
+    .input('solana', 'SOL', 1_000_000_000n)
+    .output('zcash', 'ZEC', 50_000_000n)
+    .privacy(PrivacyLevel.SHIELDED)
+
+  if (withProofs) {
+    try {
+      // Try to generate proofs
+      const proofProvider = new NoirProofProvider({ wasmPath: '/noir' })
+      await proofProvider.initialize()
+      builder.proofsProvider(proofProvider)
+    } catch (e) {
+      console.warn('Proof generation not available, continuing without proofs:', e)
+      // Continue without proofs (for development)
+    }
+  }
+
+  return builder.build()
+}
+```
+
+## Debugging
+
+### Enable Debug Logging
+
+The SDK doesn't include built-in debug logging by default, but you can wrap operations:
+
+```typescript
+function withLogging<T>(
+  fn: () => Promise<T>,
+  operation: string
+): Promise<T> {
+  console.log(`[DEBUG] Starting: ${operation}`)
+  const start = Date.now()
+
+  return fn()
+    .then(result => {
+      console.log(`[DEBUG] Success: ${operation} (${Date.now() - start}ms)`)
+      return result
+    })
+    .catch(e => {
+      console.error(`[DEBUG] Failed: ${operation} (${Date.now() - start}ms)`, e)
+      throw e
+    })
+}
+
+// Usage
+const intent = await withLogging(
+  () => sip.intent()
+    .input('solana', 'SOL', 1_000_000_000n)
+    .output('zcash', 'ZEC', 50_000_000n)
+    .build(),
+  'intent creation'
+)
+```
+
+### Inspect Error Context
+
+All SIP errors include context for debugging:
+
+```typescript
+try {
+  await sip.execute(intent, quote)
+} catch (e) {
+  if (isSIPError(e)) {
+    console.log('Error Details:', {
+      code: e.code,
+      message: e.message,
+      context: e.context,
+      timestamp: e.timestamp,
+      stack: e.stack,
+    })
+
+    // Serialize for logging
+    const serialized = e.toJSON()
+    await logToService(serialized)
+  }
+}
+```
+
+### Viewing Key Debugging
+
+Use viewing keys to debug privacy transactions:
+
+```typescript
+import { generateViewingKey, encryptForViewing, decryptWithViewing } from '@sip-protocol/sdk'
+
+// Create auditor viewing key
+const auditorKey = generateViewingKey('/compliance/auditor')
+
+// Encrypt transaction details
+const txDetails = {
+  sender: stealthAddress.spendingKey,
+  recipient: recipientAddress,
+  amount: '1000000000',
+  timestamp: Date.now(),
+}
+
+const encrypted = encryptForViewing(txDetails, auditorKey)
+
+// Later, auditor can decrypt
+try {
+  const decrypted = decryptWithViewing(encrypted, auditorKey)
+  console.log('Transaction details:', decrypted)
+} catch (e) {
+  console.error('Failed to decrypt with viewing key:', e)
+  // Wrong viewing key or corrupted data
+}
+```
+
+### Test Error Scenarios
+
+Use mock components to test error handling:
+
+```typescript
+import { createMockSolanaAdapter } from '@sip-protocol/sdk'
+
+// Test connection rejection
+const rejectingWallet = createMockSolanaAdapter({
+  shouldFailConnect: true,
+})
+
+try {
+  await rejectingWallet.connect()
+} catch (e) {
+  expect(e).toBeInstanceOf(WalletError)
+  expect(e.walletCode).toBe('WALLET_CONNECTION_REJECTED')
+}
+
+// Test signing rejection
+const rejectingWallet2 = createMockSolanaAdapter({
+  shouldFailSign: true,
+})
+await rejectingWallet2.connect()
+
+try {
+  await rejectingWallet2.signMessage(new Uint8Array([1, 2, 3]))
+} catch (e) {
+  expect(e).toBeInstanceOf(WalletError)
+  expect(e.walletCode).toBe('WALLET_SIGNING_REJECTED')
+}
+```
+
+## Common Issues
+
+### Issue: Transaction Failed
+
+**Symptoms:**
+- Error code: `SIP_5000` or `SIP_7004`
+- Message: "Transaction failed" or "Intent execution failed"
+
+**Causes:**
+1. Insufficient funds in sender wallet
+2. Slippage tolerance too low
+3. Quote expired before execution
+4. Network congestion causing timeout
+5. Invalid intent state
+
+**Solutions:**
+
+```typescript
+// 1. Check wallet balance before execution
+const balance = await wallet.getBalance()
+if (balance < intent.inputAmount) {
+  throw new ValidationError('Insufficient funds', 'input.amount', {
+    required: intent.inputAmount,
+    available: balance,
+  })
+}
+
+// 2. Increase slippage tolerance
+const quote = await sip.getQuotes(intent, {
+  slippageTolerance: 100, // 1% (in basis points)
+})
+
+// 3. Check quote expiry
+const now = Math.floor(Date.now() / 1000)
+if (quote.expiry < now) {
+  // Get new quote
+  const newQuote = await sip.getQuotes(intent)
+}
+
+// 4. Set longer timeout
+const result = await Promise.race([
+  sip.execute(intent, quote),
+  new Promise((_, reject) =>
+    setTimeout(() => reject(new NetworkError('Timeout', ErrorCode.NETWORK_TIMEOUT)), 60000)
+  )
+])
+
+// 5. Verify intent state
+if (isExpired(intent)) {
+  throw new IntentError('Intent expired', ErrorCode.INTENT_EXPIRED)
+}
+```
+
+### Issue: Invalid Stealth Address
+
+**Symptoms:**
+- Error code: `SIP_2007`
+- Message: "Validation failed for 'stealthAddress': Invalid format"
+
+**Causes:**
+1. Incorrect address format (missing prefix or invalid encoding)
+2. Wrong chain specified
+3. Corrupted keys during generation
+4. Using regular address instead of stealth address
+
+**Solutions:**
+
+```typescript
+import {
+  generateStealthMetaAddress,
+  encodeStealthMetaAddress,
+  decodeStealthMetaAddress,
+  validateStealthAddress
+} from '@sip-protocol/sdk'
+
+// ✅ Generate valid stealth address
+const keys = generateStealthMetaAddress()
+const encoded = encodeStealthMetaAddress(keys, 'solana')
+
+// Validate format: sip:solana:<spendingKey>:<viewingKey>
+if (!encoded.startsWith('sip:solana:')) {
+  throw new ValidationError('Invalid stealth address format')
+}
+
+// ✅ Decode safely
+try {
+  const decoded = decodeStealthMetaAddress(encoded)
+  console.log('Valid stealth address:', decoded)
+} catch (e) {
+  console.error('Invalid stealth address:', e)
+}
+
+// ✅ Use helper function
+const isValid = validateStealthAddress(encoded, 'solana')
+if (!isValid) {
+  throw new ValidationError('Invalid stealth address for chain', 'stealthAddress')
+}
+```
+
+### Issue: Proof Verification Failed
+
+**Symptoms:**
+- Error code: `SIP_4002`
+- Message: "Proof verification failed"
+
+**Causes:**
+1. Proof generated with wrong parameters
+2. Public inputs don't match private inputs
+3. Proof provider not initialized
+4. Circuit mismatch (wrong version)
+
+**Troubleshooting:**
+
+```typescript
+import { NoirProofProvider } from '@sip-protocol/sdk'
+
+const provider = new NoirProofProvider({ wasmPath: '/noir' })
+
+// 1. Always initialize first
+await provider.initialize()
+
+// 2. Generate proof with correct parameters
+const proofResult = await provider.generateFundingProof({
+  balance: 1000n,
+  minimumRequired: 100n,
+  assetId: 'SOL',
+  blinding: generateBlinding(), // Use same blinding as commitment
+})
+
+// 3. Verify proof with matching public inputs
+const publicInputs = {
+  commitment: pedersen(balance, blinding), // Must match!
+  minimumRequired: 100n,
+  assetId: 'SOL',
+}
+
+const isValid = await provider.verifyFundingProof(
+  proofResult.proof,
+  publicInputs
+)
+
+if (!isValid) {
+  // Debug: Check each public input
+  console.log('Public inputs:', publicInputs)
+  console.log('Proof data:', proofResult)
+  // Likely cause: Commitment doesn't match balance+blinding
+}
+```
+
+### Issue: Wallet Not Connected
+
+**Symptoms:**
+- Error code: `SIP_7001`
+- Message: "Wallet not connected. Call connect() first."
+
+**Causes:**
+1. Forgot to call `wallet.connect()`
+2. User rejected connection
+3. Wallet extension not installed
+4. Wallet disconnected after initial connection
+
+**Solutions:**
+
+```typescript
+import { WalletError } from '@sip-protocol/sdk'
+
+async function ensureConnected(wallet: WalletAdapter) {
+  if (wallet.isConnected()) {
+    return // Already connected
+  }
+
+  try {
+    await wallet.connect()
+  } catch (e) {
+    if (e instanceof WalletError) {
+      switch (e.walletCode) {
+        case 'WALLET_NOT_INSTALLED':
+          throw new Error('Please install a compatible wallet extension')
+
+        case 'WALLET_CONNECTION_REJECTED':
+          throw new Error('Please approve the wallet connection request')
+
+        case 'WALLET_CONNECTION_FAILED':
+          // Retry once
+          await wallet.connect()
+          break
+
+        default:
+          throw e
+      }
+    }
+    throw e
+  }
+}
+
+// Usage
+await ensureConnected(wallet)
+const signature = await wallet.signMessage(message)
+```
+
+### Issue: Commitment Verification Failed
+
+**Symptoms:**
+- Error code: `SIP_3010`
+- Message: "Invalid commitment" or "Commitment verification failed"
+
+**Causes:**
+1. Using different blinding factor for verification
+2. Homomorphic addition done incorrectly
+3. Amount overflow (exceeds curve order)
+4. Corrupted commitment data
+
+**Solutions:**
+
+```typescript
+import { commit, verifyOpening, addCommitments } from '@sip-protocol/sdk'
+
+// ✅ Store blinding factor with commitment
+const amount = 1000n
+const { commitment, blinding } = commit(amount)
+
+// Save both for later verification
+const stored = {
+  commitment,
+  blinding: blinding, // Must save this!
+  amount,
+}
+
+// ✅ Verify with saved blinding
+const isValid = verifyOpening(
+  stored.commitment,
+  stored.amount,
+  stored.blinding
+)
+
+console.assert(isValid, 'Verification should succeed')
+
+// ✅ Homomorphic addition
+const c1 = commit(100n)
+const c2 = commit(200n)
+const sum = addCommitments(c1.commitment, c2.commitment)
+
+// Verify sum (must use sum of blindings)
+const totalBlinding = (c1.blinding + c2.blinding) % CURVE_ORDER
+verifyOpening(sum, 300n, totalBlinding) // ✅
+```
+
+<Aside type="tip">
+Always serialize errors for logging using `error.toJSON()` to capture all debugging context.
+</Aside>
+
+<Aside type="caution">
+Never retry operations that the user explicitly rejected (connection, signing, transactions). Only retry transient errors like network timeouts.
+</Aside>
+
+## Error Utilities
+
+### Wrapping Errors
+
+Convert unknown errors to SIPError:
+
+```typescript
+import { wrapError, ErrorCode } from '@sip-protocol/sdk'
+
+async function riskyOperation() {
+  try {
+    await externalLibrary.doSomething()
+  } catch (e) {
+    throw wrapError(
+      e,
+      'External operation failed',
+      ErrorCode.INTERNAL,
+      { operation: 'doSomething' }
+    )
+  }
+}
+```
+
+### Type Guards
+
+Check error types safely:
+
+```typescript
+import { isSIPError, hasErrorCode, ErrorCode } from '@sip-protocol/sdk'
+
+try {
+  await sip.execute(intent, quote)
+} catch (e) {
+  if (isSIPError(e)) {
+    // TypeScript knows e is SIPError
+    console.log(e.code, e.context)
+  }
+
+  if (hasErrorCode(e, ErrorCode.INTENT_EXPIRED)) {
+    // Handle specific error code
+    console.log('Intent expired, creating new one')
+  }
+}
+```
+
+### Extract Error Message
+
+Safely extract message from unknown errors:
+
+```typescript
+import { getErrorMessage } from '@sip-protocol/sdk'
+
+try {
+  await operation()
+} catch (e) {
+  // Works for Error, SIPError, or any unknown type
+  const message = getErrorMessage(e)
+  console.error('Operation failed:', message)
+}
+```
+
+## Best Practices
+
+1. **Always check error types** before handling - use `instanceof` or `hasErrorCode()`
+2. **Preserve error causes** - use the `cause` option when wrapping errors
+3. **Add context** - include relevant debugging information in `context` field
+4. **Don't retry user rejections** - only retry transient errors (network, timeout)
+5. **Use circuit breakers** - prevent cascading failures to external services
+6. **Log serialized errors** - use `error.toJSON()` for structured logging
+7. **Test error paths** - use mock adapters to test error handling
+8. **Provide recovery steps** - give users actionable error messages
+9. **Validate early** - check inputs before expensive operations
+10. **Use graceful degradation** - fall back to safe defaults when possible
+
+## Next Steps
+
+- [API Reference](/reference/api) - Complete API documentation
+- [Integration Guide](/guides/solver-integration) - Building solvers with error handling
+- [Testing Guide](/guides/testing) - Testing error scenarios
+- [Deployment Guide](/guides/deployment) - Production error monitoring

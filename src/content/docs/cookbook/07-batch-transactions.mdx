@@ -1,0 +1,557 @@
+---
+title: "Batch Transactions"
+description: "Learn how to efficiently process multiple swaps, optimize gas costs, and handle concurrent intents"
+---
+
+## Overview
+
+Batch transactions allow you to process multiple swaps efficiently, reducing overhead and optimizing for throughput. This recipe covers parallel intent creation, bulk quote fetching, and concurrent execution.
+
+## Prerequisites
+
+- Completed [Basic Swap](/cookbook/01-basic-swap)
+- Understanding of async/await and Promise.all()
+- `@sip-protocol/sdk` installed
+
+## Step-by-Step
+
+### Step 1: Create Multiple Intents in Parallel
+
+Generate multiple intents concurrently for better performance:
+
+```typescript
+import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
+
+const sip = new SIP({ network: 'testnet', mode: 'demo' })
+
+// Generate stealth keys for all output chains
+const chains = ['zcash', 'ethereum', 'near'] as const
+for (const chain of chains) {
+  sip.generateStealthKeys(chain)
+}
+
+// Define batch of swaps
+interface BatchSwap {
+  id: string
+  inputChain: string
+  outputChain: string
+  inputAmount: bigint
+  minOutputAmount: bigint
+}
+
+const swapBatch: BatchSwap[] = [
+  {
+    id: 'swap-1',
+    inputChain: 'solana',
+    outputChain: 'zcash',
+    inputAmount: 1_000_000_000n,
+    minOutputAmount: 50_000_000n,
+  },
+  {
+    id: 'swap-2',
+    inputChain: 'ethereum',
+    outputChain: 'near',
+    inputAmount: 500_000_000_000_000_000n,
+    minOutputAmount: 100_000_000n,
+  },
+  {
+    id: 'swap-3',
+    inputChain: 'solana',
+    outputChain: 'ethereum',
+    inputAmount: 2_000_000_000n,
+    minOutputAmount: 100_000_000_000_000_000n,
+  },
+]
+
+// Create all intents in parallel
+console.log('Creating', swapBatch.length, 'intents...')
+
+const intentPromises = swapBatch.map(async (swap) => {
+  // Get appropriate stealth address
+  sip.generateStealthKeys(swap.outputChain as any)
+  const recipient = sip.getStealthAddress()!
+
+  const intent = await sip.intent()
+    .input(swap.inputChain, 'TOKEN', swap.inputAmount)
+    .output(swap.outputChain, 'TOKEN', swap.minOutputAmount)
+    .privacy(PrivacyLevel.SHIELDED)
+    .recipient(recipient)
+    .slippage(1)
+    .ttl(300)
+    .build()
+
+  return { swapId: swap.id, intent }
+})
+
+const intents = await Promise.all(intentPromises)
+console.log('Created', intents.length, 'intents in parallel')
+```
+
+### Step 2: Fetch Quotes in Batches
+
+Get quotes for multiple intents efficiently:
+
+```typescript
+// Fetch quotes for all intents in parallel
+console.log('Fetching quotes...')
+
+const quotePromises = intents.map(async ({ swapId, intent }) => {
+  const quotes = await sip.getQuotes(intent)
+
+  // Select best quote
+  const bestQuote = quotes.sort((a, b) =>
+    Number(b.outputAmount - a.outputAmount)
+  )[0]
+
+  return {
+    swapId,
+    intent,
+    quote: bestQuote,
+    allQuotes: quotes,
+  }
+})
+
+const quotedIntents = await Promise.all(quotePromises)
+
+console.log('Received quotes for', quotedIntents.length, 'intents')
+
+// Show summary
+for (const { swapId, quote, allQuotes } of quotedIntents) {
+  console.log(`${swapId}:`, {
+    quotes: allQuotes.length,
+    bestOutput: quote.outputAmount,
+    solver: quote.solverId,
+  })
+}
+```
+
+### Step 3: Execute Swaps with Concurrency Control
+
+Execute multiple swaps with controlled concurrency:
+
+```typescript
+// Execute with concurrency limit to avoid rate limits
+async function executeWithConcurrency<T>(
+  items: T[],
+  fn: (item: T) => Promise<any>,
+  concurrency: number
+): Promise<any[]> {
+  const results: any[] = []
+  const queue = [...items]
+  const inProgress: Promise<any>[] = []
+
+  while (queue.length > 0 || inProgress.length > 0) {
+    // Fill up to concurrency limit
+    while (inProgress.length < concurrency && queue.length > 0) {
+      const item = queue.shift()!
+      const promise = fn(item).then(result => {
+        // Remove from in-progress when done
+        const index = inProgress.indexOf(promise)
+        if (index > -1) inProgress.splice(index, 1)
+        return result
+      })
+      inProgress.push(promise)
+    }
+
+    // Wait for at least one to complete
+    if (inProgress.length > 0) {
+      const result = await Promise.race(inProgress)
+      results.push(result)
+    }
+  }
+
+  return results
+}
+
+// Execute swaps with max 3 concurrent
+console.log('Executing swaps (max 3 concurrent)...')
+
+const results = await executeWithConcurrency(
+  quotedIntents,
+  async ({ swapId, intent, quote }) => {
+    const tracked = {
+      ...intent,
+      status: 'pending' as const,
+      quotes: [],
+    }
+
+    try {
+      const result = await sip.execute(tracked, quote)
+      console.log(`${swapId}: ✓ ${result.status}`)
+      return { swapId, success: true, result }
+    } catch (error) {
+      console.error(`${swapId}: ✗ Failed -`, error)
+      return { swapId, success: false, error }
+    }
+  },
+  3  // Max 3 concurrent executions
+)
+
+// Summary
+const successful = results.filter(r => r.success).length
+const failed = results.filter(r => !r.success).length
+console.log(`\nBatch complete: ${successful} succeeded, ${failed} failed`)
+```
+
+### Step 4: Implement Retry Logic for Failed Swaps
+
+Handle failures with automatic retries:
+
+```typescript
+interface RetryConfig {
+  maxRetries: number
+  delayMs: number
+  backoffMultiplier: number
+}
+
+async function executeWithRetry<T>(
+  fn: () => Promise<T>,
+  config: RetryConfig
+): Promise<T> {
+  let lastError: any
+  let delay = config.delayMs
+
+  for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+      console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`)
+
+      if (attempt < config.maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, delay))
+        delay *= config.backoffMultiplier
+      }
+    }
+  }
+
+  throw lastError
+}
+
+// Execute with retry
+const resultsWithRetry = await Promise.all(
+  quotedIntents.map(async ({ swapId, intent, quote }) => {
+    const tracked = {
+      ...intent,
+      status: 'pending' as const,
+      quotes: [],
+    }
+
+    try {
+      const result = await executeWithRetry(
+        () => sip.execute(tracked, quote),
+        {
+          maxRetries: 3,
+          delayMs: 1000,
+          backoffMultiplier: 2,
+        }
+      )
+
+      console.log(`${swapId}: ✓ Success`)
+      return { swapId, success: true, result }
+    } catch (error) {
+      console.error(`${swapId}: ✗ Failed after retries`)
+      return { swapId, success: false, error }
+    }
+  })
+)
+```
+
+### Step 5: Track Batch Progress
+
+Monitor batch execution progress in real-time:
+
+```typescript
+class BatchTracker {
+  private total: number
+  private completed: number = 0
+  private failed: number = 0
+  private startTime: number
+
+  constructor(total: number) {
+    this.total = total
+    this.startTime = Date.now()
+  }
+
+  recordSuccess(swapId: string) {
+    this.completed++
+    this.logProgress(swapId, 'success')
+  }
+
+  recordFailure(swapId: string) {
+    this.completed++
+    this.failed++
+    this.logProgress(swapId, 'failure')
+  }
+
+  private logProgress(swapId: string, status: 'success' | 'failure') {
+    const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1)
+    const rate = (this.completed / (Date.now() - this.startTime) * 1000).toFixed(2)
+
+    console.log(
+      `[${this.completed}/${this.total}] ${swapId}: ${status} | ` +
+      `${elapsed}s elapsed | ${rate} swaps/sec`
+    )
+  }
+
+  getSummary() {
+    const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1)
+    const avgRate = (this.completed / (Date.now() - this.startTime) * 1000).toFixed(2)
+
+    return {
+      total: this.total,
+      succeeded: this.completed - this.failed,
+      failed: this.failed,
+      elapsedSeconds: parseFloat(elapsed),
+      averageRate: parseFloat(avgRate),
+    }
+  }
+}
+
+// Usage
+const tracker = new BatchTracker(quotedIntents.length)
+
+const trackedResults = await Promise.all(
+  quotedIntents.map(async ({ swapId, intent, quote }) => {
+    const tracked = {
+      ...intent,
+      status: 'pending' as const,
+      quotes: [],
+    }
+
+    try {
+      const result = await sip.execute(tracked, quote)
+      tracker.recordSuccess(swapId)
+      return { swapId, success: true, result }
+    } catch (error) {
+      tracker.recordFailure(swapId)
+      return { swapId, success: false, error }
+    }
+  })
+)
+
+console.log('\nBatch Summary:', tracker.getSummary())
+```
+
+## Complete Example
+
+Full batch transaction processor:
+
+```typescript
+import { SIP, PrivacyLevel, type ShieldedIntent, type Quote } from '@sip-protocol/sdk'
+
+class BatchSwapProcessor {
+  private sip: SIP
+  private concurrency: number
+
+  constructor(concurrency: number = 5) {
+    this.sip = new SIP({ network: 'testnet', mode: 'demo' })
+    this.concurrency = concurrency
+  }
+
+  async processBatch(swaps: BatchSwap[]) {
+    console.log(`\n=== Processing ${swaps.length} swaps ===\n`)
+
+    // 1. Create intents
+    console.log('Step 1: Creating intents...')
+    const intents = await this.createIntents(swaps)
+
+    // 2. Fetch quotes
+    console.log('Step 2: Fetching quotes...')
+    const quoted = await this.fetchQuotes(intents)
+
+    // 3. Execute swaps
+    console.log('Step 3: Executing swaps...')
+    const results = await this.executeSwaps(quoted)
+
+    // 4. Generate summary
+    return this.generateSummary(results)
+  }
+
+  private async createIntents(swaps: BatchSwap[]) {
+    return Promise.all(
+      swaps.map(async swap => {
+        this.sip.generateStealthKeys(swap.outputChain as any)
+        const recipient = this.sip.getStealthAddress()!
+
+        const intent = await this.sip.intent()
+          .input(swap.inputChain, 'TOKEN', swap.inputAmount)
+          .output(swap.outputChain, 'TOKEN', swap.minOutputAmount)
+          .privacy(PrivacyLevel.SHIELDED)
+          .recipient(recipient)
+          .build()
+
+        return { swapId: swap.id, intent }
+      })
+    )
+  }
+
+  private async fetchQuotes(
+    intents: Array<{ swapId: string; intent: ShieldedIntent }>
+  ) {
+    return Promise.all(
+      intents.map(async ({ swapId, intent }) => {
+        const quotes = await this.sip.getQuotes(intent)
+        const bestQuote = quotes.sort((a, b) =>
+          Number(b.outputAmount - a.outputAmount)
+        )[0]
+
+        return { swapId, intent, quote: bestQuote }
+      })
+    )
+  }
+
+  private async executeSwaps(
+    quoted: Array<{ swapId: string; intent: ShieldedIntent; quote: Quote }>
+  ) {
+    const tracker = new BatchTracker(quoted.length)
+
+    return Promise.all(
+      quoted.map(async ({ swapId, intent, quote }) => {
+        try {
+          const tracked = {
+            ...intent,
+            status: 'pending' as const,
+            quotes: [],
+          }
+
+          const result = await this.sip.execute(tracked, quote)
+          tracker.recordSuccess(swapId)
+          return { swapId, success: true, result }
+        } catch (error) {
+          tracker.recordFailure(swapId)
+          return { swapId, success: false, error }
+        }
+      })
+    )
+  }
+
+  private generateSummary(results: any[]) {
+    const succeeded = results.filter(r => r.success)
+    const failed = results.filter(r => !r.success)
+
+    return {
+      total: results.length,
+      succeeded: succeeded.length,
+      failed: failed.length,
+      successRate: ((succeeded.length / results.length) * 100).toFixed(1) + '%',
+      results,
+    }
+  }
+}
+
+// Example usage
+async function demonstrateBatchProcessing() {
+  const processor = new BatchSwapProcessor(3)  // Max 3 concurrent
+
+  const swaps: BatchSwap[] = [
+    { id: 'swap-1', inputChain: 'solana', outputChain: 'zcash', inputAmount: 1_000_000_000n, minOutputAmount: 50_000_000n },
+    { id: 'swap-2', inputChain: 'ethereum', outputChain: 'near', inputAmount: 1_000_000_000_000_000_000n, minOutputAmount: 100_000_000n },
+    { id: 'swap-3', inputChain: 'solana', outputChain: 'ethereum', inputAmount: 2_000_000_000n, minOutputAmount: 100_000_000_000_000_000n },
+    { id: 'swap-4', inputChain: 'near', outputChain: 'zcash', inputAmount: 5_000_000_000n, minOutputAmount: 50_000_000n },
+    { id: 'swap-5', inputChain: 'ethereum', outputChain: 'solana', inputAmount: 500_000_000_000_000_000n, minOutputAmount: 500_000_000n },
+  ]
+
+  const summary = await processor.processBatch(swaps)
+
+  console.log('\n=== Batch Summary ===')
+  console.log(`Total: ${summary.total}`)
+  console.log(`Succeeded: ${summary.succeeded}`)
+  console.log(`Failed: ${summary.failed}`)
+  console.log(`Success Rate: ${summary.successRate}`)
+
+  return summary
+}
+
+demonstrateBatchProcessing()
+  .then(() => console.log('\nBatch processing complete'))
+  .catch(err => console.error('Error:', err))
+```
+
+## Common Pitfalls
+
+### Pitfall 1: No Concurrency Control
+
+```typescript
+// ❌ Wrong - all at once, may overwhelm
+await Promise.all(many Swaps.map(swap => execute(swap)))
+```
+
+```typescript
+// ✅ Correct - controlled concurrency
+await executeWithConcurrency(swaps, execute, 5)
+```
+
+### Pitfall 2: Not Handling Partial Failures
+
+```typescript
+// ❌ Wrong - one failure stops everything
+await Promise.all(swaps.map(swap => execute(swap)))
+```
+
+```typescript
+// ✅ Correct - continue on individual failures
+await Promise.allSettled(swaps.map(swap => execute(swap)))
+```
+
+### Pitfall 3: Missing Progress Tracking
+
+```typescript
+// ❌ Wrong - no visibility into progress
+await processBatch(largeSwapList)
+// User waits with no feedback
+```
+
+```typescript
+// ✅ Correct - track and report progress
+const tracker = new BatchTracker(swaps.length)
+// Log progress as swaps complete
+```
+
+### Pitfall 4: No Retry Logic
+
+```typescript
+// ❌ Wrong - transient failures aren't retried
+try {
+  await execute(swap)
+} catch (error) {
+  // Give up immediately
+}
+```
+
+```typescript
+// ✅ Correct - retry with backoff
+await executeWithRetry(() => execute(swap), {
+  maxRetries: 3,
+  delayMs: 1000,
+  backoffMultiplier: 2,
+})
+```
+
+### Pitfall 5: Ignoring Rate Limits
+
+```typescript
+// ❌ Wrong - blast API with requests
+await Promise.all(1000s.map(s => getQuote(s)))
+```
+
+```typescript
+// ✅ Correct - respect rate limits
+await executeWithConcurrency(swaps, getQuote, 10)
+await sleep(100)  // Add delays between batches
+```
+
+## Performance Tips
+
+1. **Parallel Intent Creation:** Create intents concurrently
+2. **Batch Quote Fetching:** Fetch multiple quotes in parallel
+3. **Concurrency Limits:** Use 3-10 concurrent operations
+4. **Connection Pooling:** Reuse network connections
+5. **Caching:** Cache stealth keys and viewing keys
+6. **Progress Tracking:** Monitor throughput in real-time
+
+## Next Steps
+
+- [Handle errors gracefully](/cookbook/08-error-handling) in batch scenarios
+- [Integrate with wallets](/cookbook/09-wallet-integration) for batch signing
+- [Test with mocks](/cookbook/10-testing-mocks) for batch workflows

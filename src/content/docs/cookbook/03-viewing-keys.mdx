@@ -1,0 +1,394 @@
+---
+title: "Viewing Key Management"
+description: "Learn how to generate, derive, and manage viewing keys for compliant transactions and selective disclosure"
+---
+
+## Overview
+
+Viewing keys enable selective disclosure in compliant mode. This recipe shows how to generate master keys, derive hierarchical keys, encrypt transaction data, and enable auditor access.
+
+## Prerequisites
+
+- Understanding of [privacy levels](/cookbook/02-privacy-levels)
+- Familiarity with BIP32-style key derivation
+- `@sip-protocol/sdk` installed
+
+## Step-by-Step
+
+### Step 1: Generate a Master Viewing Key
+
+Start by generating a root viewing key for your organization:
+
+```typescript
+import { SIP } from '@sip-protocol/sdk'
+
+const sip = new SIP({ network: 'testnet', mode: 'demo' })
+
+// Generate master viewing key with a path
+const masterKey = sip.generateViewingKey('/m/44/501/0')
+
+console.log('Master viewing key:', {
+  key: masterKey.key.slice(0, 20) + '...',
+  hash: masterKey.hash.slice(0, 20) + '...',
+  path: masterKey.path,
+})
+
+// Output:
+// {
+//   key: '0x1234567890abcdef...',
+//   hash: '0xabcdef1234567890...',
+//   path: '/m/44/501/0'
+// }
+```
+
+**Important:** Store the master key securely! It's the root of your key hierarchy.
+
+### Step 2: Derive Hierarchical Keys
+
+Create derived keys for different purposes using BIP32-style derivation:
+
+```typescript
+// Derive keys for different scopes
+const taxKey2024 = sip.deriveViewingKey(masterKey, 'tax/2024')
+const auditKeyQ1 = sip.deriveViewingKey(masterKey, 'audit/q1')
+const complianceKey = sip.deriveViewingKey(masterKey, 'compliance/officer1')
+
+console.log('Derived keys:', {
+  tax: taxKey2024.path,      // /m/44/501/0/tax/2024
+  audit: auditKeyQ1.path,    // /m/44/501/0/audit/q1
+  compliance: complianceKey.path,  // /m/44/501/0/compliance/officer1
+})
+
+// Each derived key is unique and can't derive the master
+console.log('Keys are unique:',
+  taxKey2024.key !== auditKeyQ1.key &&
+  auditKeyQ1.key !== complianceKey.key
+)  // true
+```
+
+### Step 3: Encrypt Transaction Data
+
+Use viewing keys to encrypt transaction details for auditors:
+
+```typescript
+import { encryptForViewing, type TransactionData } from '@sip-protocol/sdk'
+
+// Transaction data to encrypt
+const txData: TransactionData = {
+  sender: '0xAliceWalletAddress',
+  recipient: '0xBobWalletAddress',
+  amount: '1000000000',  // 1 SOL in lamports
+  timestamp: Math.floor(Date.now() / 1000),
+}
+
+// Encrypt with the tax compliance key
+const encrypted = encryptForViewing(txData, taxKey2024)
+
+console.log('Encrypted transaction:', {
+  ciphertext: encrypted.ciphertext.slice(0, 40) + '...',
+  nonce: encrypted.nonce,
+  viewingKeyHash: encrypted.viewingKeyHash,
+})
+
+// Ciphertext is safe to store publicly - only key holder can decrypt
+```
+
+### Step 4: Decrypt with Viewing Key
+
+Auditors can decrypt the data using their viewing key:
+
+```typescript
+import { decryptWithViewing } from '@sip-protocol/sdk'
+
+try {
+  // Auditor with correct key can decrypt
+  const decrypted = decryptWithViewing(encrypted, taxKey2024)
+
+  console.log('Decrypted transaction:', {
+    sender: decrypted.sender,
+    recipient: decrypted.recipient,
+    amount: decrypted.amount,
+    timestamp: new Date(decrypted.timestamp * 1000).toISOString(),
+  })
+
+  // Output:
+  // {
+  //   sender: '0xAliceWalletAddress',
+  //   recipient: '0xBobWalletAddress',
+  //   amount: '1000000000',
+  //   timestamp: '2024-12-03T10:30:00.000Z'
+  // }
+} catch (error) {
+  console.error('Decryption failed - wrong key')
+}
+```
+
+### Step 5: Multi-Level Key Derivation
+
+Create hierarchical key structures for complex organizations:
+
+```typescript
+// Root key for organization
+const orgRoot = sip.generateViewingKey('/m/44/501/0/org')
+
+// Department level
+const financeDept = sip.deriveViewingKey(orgRoot, 'finance')
+const legalDept = sip.deriveViewingKey(orgRoot, 'legal')
+
+// Team level under finance
+const taxTeam = sip.deriveViewingKey(financeDept, 'tax')
+const auditTeam = sip.deriveViewingKey(financeDept, 'audit')
+
+// Individual level under tax team
+const taxOfficer1 = sip.deriveViewingKey(taxTeam, 'officer1')
+const taxOfficer2 = sip.deriveViewingKey(taxTeam, 'officer2')
+
+console.log('Hierarchical structure:', {
+  root: orgRoot.path,
+  finance: financeDept.path,
+  taxTeam: taxTeam.path,
+  officer1: taxOfficer1.path,
+})
+
+// Output:
+// {
+//   root: '/m/44/501/0/org',
+//   finance: '/m/44/501/0/org/finance',
+//   taxTeam: '/m/44/501/0/org/finance/tax',
+//   officer1: '/m/44/501/0/org/finance/tax/officer1'
+// }
+```
+
+## Complete Example
+
+Full workflow for organizational key management:
+
+```typescript
+import {
+  SIP,
+  encryptForViewing,
+  decryptWithViewing,
+  type TransactionData,
+} from '@sip-protocol/sdk'
+
+async function organizationalKeyManagement() {
+  const sip = new SIP({ network: 'testnet', mode: 'demo' })
+
+  // 1. Generate master key (store securely!)
+  const masterKey = sip.generateViewingKey('/m/44/501/0/company')
+  console.log('Master key generated:', masterKey.path)
+
+  // 2. Derive keys for different purposes
+  const keys = {
+    tax2024: sip.deriveViewingKey(masterKey, 'tax/2024'),
+    audit: sip.deriveViewingKey(masterKey, 'audit/external'),
+    compliance: sip.deriveViewingKey(masterKey, 'compliance/aml'),
+  }
+
+  // 3. Create transaction records for each category
+  const transactions = {
+    taxable: {
+      sender: '0xCompanyWallet',
+      recipient: '0xVendor',
+      amount: '5000000000',  // 5 SOL
+      timestamp: Math.floor(Date.now() / 1000),
+    },
+    auditable: {
+      sender: '0xCompanyWallet',
+      recipient: '0xPartner',
+      amount: '10000000000',  // 10 SOL
+      timestamp: Math.floor(Date.now() / 1000),
+    },
+  }
+
+  // 4. Encrypt with appropriate keys
+  const encryptedTax = encryptForViewing(transactions.taxable, keys.tax2024)
+  const encryptedAudit = encryptForViewing(transactions.auditable, keys.audit)
+
+  console.log('Transactions encrypted')
+
+  // 5. Tax authority can only decrypt tax records
+  const taxDecrypted = decryptWithViewing(encryptedTax, keys.tax2024)
+  console.log('Tax authority sees:', {
+    amount: taxDecrypted.amount,
+    timestamp: new Date(taxDecrypted.timestamp * 1000).toISOString(),
+  })
+
+  try {
+    // Tax authority CANNOT decrypt audit records
+    decryptWithViewing(encryptedAudit, keys.tax2024)
+  } catch (error) {
+    console.log('Tax authority cannot access audit records ✓')
+  }
+
+  // 6. External auditor can only decrypt audit records
+  const auditDecrypted = decryptWithViewing(encryptedAudit, keys.audit)
+  console.log('Auditor sees:', {
+    sender: auditDecrypted.sender,
+    recipient: auditDecrypted.recipient,
+    amount: auditDecrypted.amount,
+  })
+
+  return { keys, encryptedTax, encryptedAudit }
+}
+
+organizationalKeyManagement()
+  .then(() => console.log('Key management complete'))
+  .catch(err => console.error('Error:', err))
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Losing the Master Key
+
+**Problem:** Not backing up the master key securely.
+
+```typescript
+// ❌ Wrong - key lost if app crashes
+const masterKey = sip.generateViewingKey('/m/44/501/0')
+// ... app crashes, key lost forever
+```
+
+**Solution:** Immediately back up master keys to secure storage.
+
+```typescript
+// ✅ Correct - back up to secure storage
+const masterKey = sip.generateViewingKey('/m/44/501/0')
+
+// Store in secure vault (example)
+await secureVault.store('viewing-key-master', {
+  key: masterKey.key,
+  path: masterKey.path,
+  createdAt: new Date().toISOString(),
+})
+
+// Also back up offline
+console.log('BACKUP THIS KEY:', masterKey.key)
+```
+
+### Pitfall 2: Reusing Keys Across Contexts
+
+**Problem:** Using the same key for different purposes.
+
+```typescript
+// ❌ Wrong - same key for everything
+const key = sip.generateViewingKey()
+
+const tax = encryptForViewing(taxData, key)
+const audit = encryptForViewing(auditData, key)
+const personal = encryptForViewing(personalData, key)
+// Now everyone with the key can see everything
+```
+
+**Solution:** Derive unique keys for each context.
+
+```typescript
+// ✅ Correct - separate keys per context
+const master = sip.generateViewingKey('/m/44/501/0')
+const taxKey = sip.deriveViewingKey(master, 'tax')
+const auditKey = sip.deriveViewingKey(master, 'audit')
+const personalKey = sip.deriveViewingKey(master, 'personal')
+
+const tax = encryptForViewing(taxData, taxKey)
+const audit = encryptForViewing(auditData, auditKey)
+const personal = encryptForViewing(personalData, personalKey)
+// Each key only unlocks its own data
+```
+
+### Pitfall 3: Exposing Viewing Keys in Client Code
+
+**Problem:** Storing viewing keys in frontend code.
+
+```typescript
+// ❌ Wrong - key exposed in frontend
+const MASTER_KEY = '0x1234567890abcdef...'  // Hardcoded!
+const key = { key: MASTER_KEY, path: '/', hash: '...' }
+```
+
+**Solution:** Keep viewing keys server-side, only expose derived keys when needed.
+
+```typescript
+// ✅ Correct - keys on server, expose only what's needed
+// Server-side:
+app.post('/api/get-viewing-key', authenticate, (req, res) => {
+  const masterKey = getSecureKey()  // From vault
+  const userKey = deriveViewingKey(masterKey, `user/${req.userId}`)
+  res.json({ key: userKey })
+})
+
+// Client-side:
+const viewingKey = await fetch('/api/get-viewing-key').then(r => r.json())
+```
+
+### Pitfall 4: Not Verifying Viewing Key Hash
+
+**Problem:** Attempting decryption without checking hash first.
+
+```typescript
+// ❌ Wrong - expensive decryption attempt with wrong key
+try {
+  const data = decryptWithViewing(encrypted, wrongKey)
+} catch (error) {
+  // Failed after expensive crypto operations
+}
+```
+
+**Solution:** Check viewing key hash before attempting decryption.
+
+```typescript
+// ✅ Correct - check hash first (cheap operation)
+if (encrypted.viewingKeyHash !== myKey.hash) {
+  console.log('Wrong key - skipping decryption')
+} else {
+  const data = decryptWithViewing(encrypted, myKey)
+}
+```
+
+### Pitfall 5: Deriving Keys from Derived Keys Incorrectly
+
+**Problem:** Expecting derived keys to decrypt parent-encrypted data.
+
+```typescript
+// ❌ Wrong assumption
+const parent = sip.generateViewingKey('/m/0')
+const child = sip.deriveViewingKey(parent, 'child')
+
+const encrypted = encryptForViewing(data, parent)
+
+// This will fail - child can't decrypt parent's data
+try {
+  decryptWithViewing(encrypted, child)  // Error!
+} catch (error) {
+  console.log('Child keys cannot decrypt parent data')
+}
+```
+
+**Solution:** Understand that key derivation is one-way.
+
+```typescript
+// ✅ Correct - each key encrypts its own data
+const parent = sip.generateViewingKey('/m/0')
+const child = sip.deriveViewingKey(parent, 'child')
+
+// Encrypt with appropriate key
+const parentData = encryptForViewing(data1, parent)
+const childData = encryptForViewing(data2, child)
+
+// Each decrypts with its own key
+decryptWithViewing(parentData, parent)  // ✓
+decryptWithViewing(childData, child)    // ✓
+```
+
+## Best Practices
+
+1. **Key Hierarchy:** Use paths that reflect your organization structure
+2. **Backup Strategy:** Back up master keys offline, encrypted
+3. **Key Rotation:** Rotate keys periodically (e.g., yearly)
+4. **Least Privilege:** Give auditors only the keys they need
+5. **Audit Logs:** Log all viewing key usage for accountability
+
+## Next Steps
+
+- [Enable multi-party disclosure](/cookbook/04-multi-party-disclosure) with multiple keys
+- [Implement compliance reporting](/cookbook/06-compliance-reporting) workflows
+- [Handle errors gracefully](/cookbook/08-error-handling) during encryption/decryption

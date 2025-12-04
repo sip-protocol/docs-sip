@@ -44,6 +44,21 @@ export default defineConfig({
           ],
         },
         {
+          label: 'SDK Cookbook',
+          items: [
+            { label: 'Basic Swap with Privacy', slug: 'cookbook/01-basic-swap' },
+            { label: 'Custom Privacy Levels', slug: 'cookbook/02-privacy-levels' },
+            { label: 'Viewing Key Management', slug: 'cookbook/03-viewing-keys' },
+            { label: 'Multi-Party Disclosure', slug: 'cookbook/04-multi-party-disclosure' },
+            { label: 'Stealth Address Scanning', slug: 'cookbook/05-stealth-scanning' },
+            { label: 'Compliance Reporting', slug: 'cookbook/06-compliance-reporting' },
+            { label: 'Batch Transactions', slug: 'cookbook/07-batch-transactions' },
+            { label: 'Error Handling Patterns', slug: 'cookbook/08-error-handling' },
+            { label: 'Wallet Integration', slug: 'cookbook/09-wallet-integration' },
+            { label: 'Testing with Mocks', slug: 'cookbook/10-testing-mocks' },
+          ],
+        },
+        {
           label: 'Concepts',
           items: [
             { label: 'Privacy Levels', slug: 'concepts/privacy-levels' },

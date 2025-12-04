@@ -11,13 +11,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Deprecation warnings for legacy methods scheduled for removal in v0.2.0
+### Planned
+- External security audit
+- Proof composition research (M16)
 
-### Deprecated
-- `createCommitment()` in `@sip-protocol/sdk` - Use `commit()` from `./commitment` instead
-- `verifyCommitment()` in `@sip-protocol/sdk` - Use `verifyOpening()` from `./commitment` instead
-- `generateShieldedAddress()` in `ZcashRPCClient` - Use `createAccount()` and `getAddressForAccount()` instead
+## [0.6.0] - 2025-12-04
+
+### Added - M15 Application Layer
+- Universal wallet adapter with multi-wallet session management
+- Hardware wallet support (Ledger, Trezor)
+- WalletConnect v2 integration
+- Social recovery system
+
+### Added - M14 Developer Experience
+- `@sip-protocol/react` package with hooks (useSIP, useStealthAddress, usePrivateSwap, useViewingKey)
+- `@sip-protocol/cli` package with commands (generate, verify, quote, swap)
+- `@sip-protocol/api` package with REST API and OpenAPI spec
+- 157 new tests (React: 57, CLI: 33, API: 67)
+
+### Added - M13 Compliance Layer
+- Selective disclosure viewing keys
+- Audit trail generation
+- Compliance proof system
+- Regulatory reporting helpers
+
+## [0.5.0] - 2025-12-01
+
+### Added - M12 Multi-Chain
+- Bitcoin Silent Payments (BIP-352)
+- Cosmos IBC stealth addresses
+- Aptos address derivation
+- Sui address derivation
+- Support for 15+ chains
+
+### Added - M11 Multi-Settlement
+- SettlementBackend interface
+- SmartRouter implementation
+- 3 settlement backends (NEAR Intents, Zcash, Direct Chain)
+
+### Added - M10 ZK Production
+- Noir circuits wired to SDK
+- WASM browser proving
+- Web Worker proof generation
+- BrowserNoirProvider implementation
+
+### Added - M9 Stable Core
+- 100% passing test suite
+- CI/CD validation pipeline
+- Zcash swap integration
 
 ## [0.1.0] - 2025-11-27
 
@@ -30,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NEAR Intents adapter integration
 - Zcash RPC client with shielded transaction support
 - Wallet adapters (abstract interface + Solana/Ethereum)
-- Comprehensive test suite (1,293 tests)
+- Comprehensive test suite
 - ZK proof specifications and mock implementations
 
 ### Security

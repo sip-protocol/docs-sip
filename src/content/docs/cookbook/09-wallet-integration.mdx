@@ -1,0 +1,655 @@
+---
+title: "Wallet Integration"
+description: "Learn how to integrate SIP SDK with popular wallets (Phantom, MetaMask, NEAR Wallet) for signing and transaction execution"
+---
+
+## Overview
+
+This recipe shows how to integrate the SIP SDK with popular wallets to enable users to sign transactions, manage keys, and execute swaps using their existing wallet infrastructure.
+
+## Prerequisites
+
+- Completed [Basic Swap](/cookbook/01-basic-swap)
+- Understanding of wallet adapters
+- Wallet browser extensions installed for testing
+
+## Step-by-Step
+
+### Step 1: Understand the WalletAdapter Interface
+
+The SDK defines a standard wallet adapter interface:
+
+```typescript
+import type { WalletAdapter } from '@sip-protocol/sdk'
+
+// Standard wallet adapter interface
+interface WalletAdapter {
+  /** Connected chain */
+  chain: ChainId
+  /** Wallet address */
+  address: string
+  /** Sign a message */
+  signMessage(message: string): Promise<string>
+  /** Sign a transaction */
+  signTransaction(tx: unknown): Promise<unknown>
+  /** Send a transaction (optional) */
+  sendTransaction?(tx: unknown): Promise<string>
+}
+```
+
+### Step 2: Create a Phantom (Solana) Wallet Adapter
+
+Integrate with Phantom wallet for Solana:
+
+```typescript
+import { SIP, type ChainId } from '@sip-protocol/sdk'
+
+class PhantomWalletAdapter implements WalletAdapter {
+  chain: ChainId = 'solana'
+  address: string = ''
+  private provider: any
+
+  async connect(): Promise<void> {
+    // Get Phantom provider
+    const provider = (window as any).phantom?.solana
+
+    if (!provider) {
+      throw new Error('Phantom wallet not found. Please install Phantom.')
+    }
+
+    // Request connection
+    const response = await provider.connect()
+    this.provider = provider
+    this.address = response.publicKey.toString()
+
+    console.log('Connected to Phantom:', this.address)
+  }
+
+  async disconnect(): Promise<void> {
+    if (this.provider) {
+      await this.provider.disconnect()
+      this.address = ''
+      console.log('Disconnected from Phantom')
+    }
+  }
+
+  async signMessage(message: string): Promise<string> {
+    if (!this.provider) {
+      throw new Error('Wallet not connected')
+    }
+
+    const encodedMessage = new TextEncoder().encode(message)
+    const { signature } = await this.provider.signMessage(
+      encodedMessage,
+      'utf8'
+    )
+
+    return Buffer.from(signature).toString('hex')
+  }
+
+  async signTransaction(tx: unknown): Promise<unknown> {
+    if (!this.provider) {
+      throw new Error('Wallet not connected')
+    }
+
+    return await this.provider.signTransaction(tx)
+  }
+
+  async sendTransaction(tx: unknown): Promise<string> {
+    if (!this.provider) {
+      throw new Error('Wallet not connected')
+    }
+
+    const { signature } = await this.provider.signAndSendTransaction(tx)
+    return signature
+  }
+
+  isConnected(): boolean {
+    return !!this.address
+  }
+}
+
+// Usage
+const sip = new SIP({ network: 'testnet', mode: 'demo' })
+const phantom = new PhantomWalletAdapter()
+
+// Connect wallet
+await phantom.connect()
+
+// Connect to SIP
+sip.connect(phantom)
+
+// Now you can create intents with the connected wallet
+console.log('Wallet connected:', sip.getWallet()?.address)
+```
+
+### Step 3: Create a MetaMask (Ethereum) Wallet Adapter
+
+Integrate with MetaMask for Ethereum:
+
+```typescript
+class MetaMaskWalletAdapter implements WalletAdapter {
+  chain: ChainId = 'ethereum'
+  address: string = ''
+  private provider: any
+
+  async connect(): Promise<void> {
+    // Get MetaMask provider
+    const provider = (window as any).ethereum
+
+    if (!provider || !provider.isMetaMask) {
+      throw new Error('MetaMask not found. Please install MetaMask.')
+    }
+
+    // Request accounts
+    const accounts = await provider.request({
+      method: 'eth_requestAccounts',
+    })
+
+    this.provider = provider
+    this.address = accounts[0]
+
+    // Listen for account changes
+    provider.on('accountsChanged', (accounts: string[]) => {
+      if (accounts.length > 0) {
+        this.address = accounts[0]
+        console.log('Account changed:', this.address)
+      } else {
+        this.address = ''
+      }
+    })
+
+    // Listen for chain changes
+    provider.on('chainChanged', () => {
+      window.location.reload()
+    })
+
+    console.log('Connected to MetaMask:', this.address)
+  }
+
+  async disconnect(): Promise<void> {
+    // MetaMask doesn't have a disconnect method
+    // Just clear the address
+    this.address = ''
+    console.log('Disconnected from MetaMask')
+  }
+
+  async signMessage(message: string): Promise<string> {
+    if (!this.provider) {
+      throw new Error('Wallet not connected')
+    }
+
+    const signature = await this.provider.request({
+      method: 'personal_sign',
+      params: [message, this.address],
+    })
+
+    return signature
+  }
+
+  async signTransaction(tx: unknown): Promise<unknown> {
+    if (!this.provider) {
+      throw new Error('Wallet not connected')
+    }
+
+    // MetaMask signs and sends in one step
+    // This would be used for custom transaction flows
+    return tx
+  }
+
+  async sendTransaction(tx: any): Promise<string> {
+    if (!this.provider) {
+      throw new Error('Wallet not connected')
+    }
+
+    const txHash = await this.provider.request({
+      method: 'eth_sendTransaction',
+      params: [tx],
+    })
+
+    return txHash
+  }
+
+  isConnected(): boolean {
+    return !!this.address
+  }
+
+  async getBalance(): Promise<bigint> {
+    if (!this.provider || !this.address) {
+      throw new Error('Wallet not connected')
+    }
+
+    const balance = await this.provider.request({
+      method: 'eth_getBalance',
+      params: [this.address, 'latest'],
+    })
+
+    return BigInt(balance)
+  }
+}
+
+// Usage
+const metamask = new MetaMaskWalletAdapter()
+await metamask.connect()
+sip.connect(metamask)
+
+// Check balance
+const balance = await metamask.getBalance()
+console.log('ETH Balance:', balance.toString())
+```
+
+### Step 4: Create a NEAR Wallet Adapter
+
+Integrate with NEAR Wallet:
+
+```typescript
+import { connect, keyStores, WalletConnection } from 'near-api-js'
+
+class NEARWalletAdapter implements WalletAdapter {
+  chain: ChainId = 'near'
+  address: string = ''
+  private wallet?: WalletConnection
+
+  async connect(): Promise<void> {
+    // Configure NEAR connection
+    const config = {
+      networkId: 'testnet',
+      keyStore: new keyStores.BrowserLocalStorageKeyStore(),
+      nodeUrl: 'https://rpc.testnet.near.org',
+      walletUrl: 'https://wallet.testnet.near.org',
+      helperUrl: 'https://helper.testnet.near.org',
+    }
+
+    // Connect to NEAR
+    const near = await connect(config)
+
+    // Create wallet connection
+    this.wallet = new WalletConnection(near, 'sip-protocol')
+
+    // Request sign in if not signed in
+    if (!this.wallet.isSignedIn()) {
+      await this.wallet.requestSignIn({
+        contractId: '',  // Optional contract ID
+        methodNames: [],  // Optional method names
+      })
+    }
+
+    this.address = this.wallet.getAccountId()
+    console.log('Connected to NEAR:', this.address)
+  }
+
+  async disconnect(): Promise<void> {
+    if (this.wallet) {
+      this.wallet.signOut()
+      this.address = ''
+      console.log('Disconnected from NEAR')
+    }
+  }
+
+  async signMessage(message: string): Promise<string> {
+    if (!this.wallet || !this.address) {
+      throw new Error('Wallet not connected')
+    }
+
+    // NEAR doesn't have a standard signMessage
+    // You'd need to implement using near-api-js methods
+    throw new Error('Not implemented')
+  }
+
+  async signTransaction(tx: unknown): Promise<unknown> {
+    if (!this.wallet) {
+      throw new Error('Wallet not connected')
+    }
+
+    // Sign with NEAR wallet
+    return tx
+  }
+
+  async sendTransaction(tx: any): Promise<string> {
+    if (!this.wallet) {
+      throw new Error('Wallet not connected')
+    }
+
+    const account = this.wallet.account()
+    const result = await account.signAndSendTransaction(tx)
+
+    return result.transaction.hash
+  }
+
+  isConnected(): boolean {
+    return !!this.wallet?.isSignedIn()
+  }
+}
+
+// Usage
+const nearWallet = new NEARWalletAdapter()
+await nearWallet.connect()
+sip.connect(nearWallet)
+```
+
+### Step 5: Create a Multi-Wallet Manager
+
+Manage multiple wallets in a single application:
+
+```typescript
+type SupportedWallet = 'phantom' | 'metamask' | 'near'
+
+class WalletManager {
+  private sip: SIP
+  private connectedWallet?: {
+    type: SupportedWallet
+    adapter: WalletAdapter
+  }
+
+  constructor(sip: SIP) {
+    this.sip = sip
+  }
+
+  async connect(walletType: SupportedWallet): Promise<WalletAdapter> {
+    // Disconnect current wallet if any
+    if (this.connectedWallet) {
+      await this.disconnect()
+    }
+
+    // Create appropriate adapter
+    let adapter: WalletAdapter
+
+    switch (walletType) {
+      case 'phantom':
+        adapter = new PhantomWalletAdapter()
+        break
+      case 'metamask':
+        adapter = new MetaMaskWalletAdapter()
+        break
+      case 'near':
+        adapter = new NEARWalletAdapter()
+        break
+      default:
+        throw new Error(`Unsupported wallet: ${walletType}`)
+    }
+
+    // Connect adapter
+    await adapter.connect()
+
+    // Connect to SIP
+    this.sip.connect(adapter)
+
+    // Store reference
+    this.connectedWallet = { type: walletType, adapter }
+
+    console.log(`Connected ${walletType}:`, adapter.address)
+
+    return adapter
+  }
+
+  async disconnect(): Promise<void> {
+    if (this.connectedWallet) {
+      await this.connectedWallet.adapter.disconnect()
+      this.sip.disconnect()
+      this.connectedWallet = undefined
+      console.log('Wallet disconnected')
+    }
+  }
+
+  getConnected(): { type: SupportedWallet; adapter: WalletAdapter } | undefined {
+    return this.connectedWallet
+  }
+
+  isConnected(): boolean {
+    return !!this.connectedWallet?.adapter.isConnected()
+  }
+
+  getAddress(): string | undefined {
+    return this.connectedWallet?.adapter.address
+  }
+
+  getChain(): ChainId | undefined {
+    return this.connectedWallet?.adapter.chain
+  }
+}
+
+// Usage
+const sip = new SIP({ network: 'testnet', mode: 'demo' })
+const walletManager = new WalletManager(sip)
+
+// Connect different wallets based on user choice
+const userChoice = 'phantom'  // From UI
+
+try {
+  await walletManager.connect(userChoice)
+  console.log('Connected wallet:', walletManager.getAddress())
+
+  // Execute swap with connected wallet
+  const intent = await sip.intent()
+    .input(walletManager.getChain()!, 'TOKEN', 1_000_000_000n)
+    .output('zcash', 'ZEC', 50_000_000n)
+    .privacy(PrivacyLevel.SHIELDED)
+    .build()
+
+  // ... continue with swap
+} catch (error: any) {
+  console.error('Wallet connection failed:', error.message)
+}
+```
+
+## Complete Example
+
+Full wallet integration with React:
+
+```typescript
+import { useState, useEffect } from 'react'
+import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
+
+function WalletIntegrationDemo() {
+  const [sip] = useState(() => new SIP({ network: 'testnet', mode: 'demo' }))
+  const [walletManager] = useState(() => new WalletManager(sip))
+  const [connected, setConnected] = useState(false)
+  const [address, setAddress] = useState<string>()
+  const [swapping, setSwapping] = useState(false)
+
+  // Detect wallet availability
+  const availableWallets = {
+    phantom: !!(window as any).phantom?.solana,
+    metamask: !!(window as any).ethereum?.isMetaMask,
+    near: true,  // NEAR wallet is always available (redirects)
+  }
+
+  const connectWallet = async (type: SupportedWallet) => {
+    try {
+      await walletManager.connect(type)
+      setConnected(true)
+      setAddress(walletManager.getAddress())
+    } catch (error: any) {
+      alert(`Failed to connect: ${error.message}`)
+    }
+  }
+
+  const disconnectWallet = async () => {
+    await walletManager.disconnect()
+    setConnected(false)
+    setAddress(undefined)
+  }
+
+  const executeSwap = async () => {
+    if (!connected) {
+      alert('Please connect a wallet first')
+      return
+    }
+
+    setSwapping(true)
+
+    try {
+      // Generate stealth keys
+      sip.generateStealthKeys('zcash')
+      const recipient = sip.getStealthAddress()!
+
+      // Create intent
+      const intent = await sip.intent()
+        .input(walletManager.getChain()!, 'TOKEN', 1_000_000_000n, address)
+        .output('zcash', 'ZEC', 50_000_000n)
+        .privacy(PrivacyLevel.SHIELDED)
+        .recipient(recipient)
+        .build()
+
+      // Get quotes
+      const quotes = await sip.getQuotes(intent)
+      const bestQuote = quotes[0]
+
+      // Execute
+      const tracked = { ...intent, status: 'pending' as const, quotes: [] }
+      const result = await sip.execute(tracked, bestQuote)
+
+      alert(`Swap successful! Status: ${result.status}`)
+    } catch (error: any) {
+      alert(`Swap failed: ${error.message}`)
+    } finally {
+      setSwapping(false)
+    }
+  }
+
+  return (
+    <div>
+      <h1>Wallet Integration Demo</h1>
+
+      {!connected ? (
+        <div>
+          <h2>Connect Wallet</h2>
+          {availableWallets.phantom && (
+            <button onClick={() => connectWallet('phantom')}>
+              Connect Phantom
+            </button>
+          )}
+          {availableWallets.metamask && (
+            <button onClick={() => connectWallet('metamask')}>
+              Connect MetaMask
+            </button>
+          )}
+          <button onClick={() => connectWallet('near')}>
+            Connect NEAR Wallet
+          </button>
+        </div>
+      ) : (
+        <div>
+          <h2>Connected</h2>
+          <p>Address: {address?.slice(0, 20)}...</p>
+          <p>Chain: {walletManager.getChain()}</p>
+
+          <button onClick={executeSwap} disabled={swapping}>
+            {swapping ? 'Swapping...' : 'Execute Swap'}
+          </button>
+
+          <button onClick={disconnectWallet}>Disconnect</button>
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Not Detecting Wallet Availability
+
+```typescript
+// ❌ Wrong - assumes wallet is installed
+const adapter = new PhantomWalletAdapter()
+await adapter.connect()  // Throws if not installed
+```
+
+```typescript
+// ✅ Correct - check availability first
+if ((window as any).phantom?.solana) {
+  const adapter = new PhantomWalletAdapter()
+  await adapter.connect()
+} else {
+  alert('Please install Phantom wallet')
+}
+```
+
+### Pitfall 2: Not Handling Account Changes
+
+```typescript
+// ❌ Wrong - doesn't listen for changes
+await metamask.connect()
+// User switches accounts, app doesn't update
+```
+
+```typescript
+// ✅ Correct - listen for changes
+provider.on('accountsChanged', (accounts: string[]) => {
+  if (accounts.length > 0) {
+    this.address = accounts[0]
+    onAccountChanged(accounts[0])
+  }
+})
+```
+
+### Pitfall 3: Not Validating Signatures
+
+```typescript
+// ❌ Wrong - trust signature without verification
+const sig = await wallet.signMessage(message)
+// Use sig without verification
+```
+
+```typescript
+// ✅ Correct - verify signature
+const sig = await wallet.signMessage(message)
+const isValid = verifySignature(message, sig, wallet.address)
+if (!isValid) throw new Error('Invalid signature')
+```
+
+### Pitfall 4: Blocking UI During Connection
+
+```typescript
+// ❌ Wrong - blocks UI
+await wallet.connect()
+// UI frozen while waiting
+```
+
+```typescript
+// ✅ Correct - show loading state
+setConnecting(true)
+try {
+  await wallet.connect()
+} finally {
+  setConnecting(false)
+}
+```
+
+### Pitfall 5: Not Handling Rejections
+
+```typescript
+// ❌ Wrong - doesn't handle user rejection
+await wallet.signTransaction(tx)
+// User rejects, unhandled error
+```
+
+```typescript
+// ✅ Correct - handle rejection gracefully
+try {
+  await wallet.signTransaction(tx)
+} catch (error: any) {
+  if (error.code === 4001) {
+    alert('Transaction rejected by user')
+  } else {
+    alert(`Error: ${error.message}`)
+  }
+}
+```
+
+## Best Practices
+
+1. **Detect Availability:** Check if wallet is installed
+2. **Handle Events:** Listen for account/chain changes
+3. **Show Feedback:** Display loading/error states
+4. **Graceful Errors:** Handle user rejections gracefully
+5. **Multi-Wallet:** Support multiple wallet types
+6. **Persistent State:** Remember connected wallet
+7. **Auto-Reconnect:** Reconnect on page reload if previously connected
+
+## Next Steps
+
+- [Test wallet integration](/cookbook/10-testing-mocks) with mocks
+- [Handle errors gracefully](/cookbook/08-error-handling) in wallet flows
+- Learn about [wallet adapter spec](/specs/wallet-adapter-spec)

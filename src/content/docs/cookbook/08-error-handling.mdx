@@ -1,0 +1,678 @@
+---
+title: "Error Handling Patterns"
+description: "Learn robust error handling strategies for production SIP applications"
+---
+
+## Overview
+
+Proper error handling is crucial for production applications. This recipe covers validation errors, crypto errors, network failures, and recovery strategies.
+
+## Prerequisites
+
+- Completed [Basic Swap](/cookbook/01-basic-swap)
+- Understanding of try/catch and error types
+- `@sip-protocol/sdk` installed
+
+## Step-by-Step
+
+### Step 1: Understand Error Types
+
+The SDK provides specific error types for different failure modes:
+
+```typescript
+import {
+  ValidationError,
+  CryptoError,
+  IntentError,
+  ErrorCode,
+} from '@sip-protocol/sdk'
+
+// ValidationError - invalid inputs
+try {
+  sip.intent()
+    .input('invalid-chain', 'TOKEN', 100n)
+    .build()
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.error('Validation failed:', error.message)
+    console.error('Field:', error.field)
+    console.error('Details:', error.details)
+  }
+}
+
+// CryptoError - encryption/decryption failures
+try {
+  decryptWithViewing(encrypted, wrongKey)
+} catch (error) {
+  if (error instanceof CryptoError) {
+    console.error('Crypto operation failed:', error.message)
+    console.error('Code:', error.code)
+    console.error('Operation:', error.details?.operation)
+  }
+}
+
+// IntentError - intent-related failures
+try {
+  await sip.execute(expiredIntent, quote)
+} catch (error) {
+  if (error instanceof IntentError) {
+    console.error('Intent error:', error.message)
+    console.error('Code:', error.code)
+    console.error('Intent ID:', error.details?.intentId)
+  }
+}
+```
+
+### Step 2: Validate Inputs Early
+
+Catch errors before expensive operations:
+
+```typescript
+import { isValidChainId, isValidAmount, isValidPrivacyLevel } from '@sip-protocol/sdk'
+
+function validateSwapInputs(
+  inputChain: string,
+  outputChain: string,
+  amount: bigint,
+  privacyLevel: string
+): { valid: boolean; errors: string[] } {
+  const errors: string[] = []
+
+  // Validate chains
+  if (!isValidChainId(inputChain)) {
+    errors.push(`Invalid input chain: ${inputChain}`)
+  }
+  if (!isValidChainId(outputChain)) {
+    errors.push(`Invalid output chain: ${outputChain}`)
+  }
+
+  // Validate amount
+  if (!isValidAmount(amount)) {
+    errors.push('Amount must be positive')
+  }
+
+  // Validate privacy level
+  if (!isValidPrivacyLevel(privacyLevel)) {
+    errors.push(`Invalid privacy level: ${privacyLevel}`)
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  }
+}
+
+// Usage
+const validation = validateSwapInputs('solana', 'zcash', 1_000_000_000n, 'shielded')
+
+if (!validation.valid) {
+  console.error('Validation errors:')
+  validation.errors.forEach(err => console.error(`  - ${err}`))
+  throw new Error('Invalid inputs')
+}
+
+// Proceed with swap
+console.log('Inputs valid, proceeding...')
+```
+
+### Step 3: Handle Network Errors with Retry
+
+Implement retry logic for transient network failures:
+
+```typescript
+interface RetryOptions {
+  maxRetries: number
+  delayMs: number
+  backoffMultiplier: number
+  retryableErrors?: ErrorCode[]
+}
+
+async function executeWithRetry<T>(
+  operation: () => Promise<T>,
+  options: RetryOptions,
+  operationName: string = 'operation'
+): Promise<T> {
+  const {
+    maxRetries,
+    delayMs,
+    backoffMultiplier,
+    retryableErrors = [],
+  } = options
+
+  let lastError: any
+  let delay = delayMs
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation()
+    } catch (error: any) {
+      lastError = error
+
+      // Check if error is retryable
+      const isRetryable =
+        error.code === 'NETWORK_ERROR' ||
+        error.code === 'TIMEOUT' ||
+        (retryableErrors.length > 0 && retryableErrors.includes(error.code))
+
+      if (!isRetryable || attempt === maxRetries) {
+        console.error(
+          `${operationName} failed after ${attempt} attempt(s):`,
+          error.message
+        )
+        throw error
+      }
+
+      console.log(
+        `${operationName} attempt ${attempt} failed, retrying in ${delay}ms...`
+      )
+
+      await new Promise(resolve => setTimeout(resolve, delay))
+      delay *= backoffMultiplier
+    }
+  }
+
+  throw lastError
+}
+
+// Usage - get quotes with retry
+const quotes = await executeWithRetry(
+  () => sip.getQuotes(intent),
+  {
+    maxRetries: 3,
+    delayMs: 1000,
+    backoffMultiplier: 2,
+  },
+  'getQuotes'
+)
+
+// Usage - execute with retry
+const result = await executeWithRetry(
+  () => sip.execute(tracked, quote),
+  {
+    maxRetries: 3,
+    delayMs: 2000,
+    backoffMultiplier: 1.5,
+    retryableErrors: [ErrorCode.NETWORK_ERROR],
+  },
+  'execute'
+)
+```
+
+### Step 4: Implement Circuit Breaker
+
+Prevent cascading failures with circuit breaker pattern:
+
+```typescript
+enum CircuitState {
+  CLOSED = 'CLOSED',      // Normal operation
+  OPEN = 'OPEN',          // Failures detected, rejecting requests
+  HALF_OPEN = 'HALF_OPEN' // Testing if service recovered
+}
+
+class CircuitBreaker {
+  private state: CircuitState = CircuitState.CLOSED
+  private failureCount: number = 0
+  private successCount: number = 0
+  private lastFailureTime: number = 0
+  private readonly failureThreshold: number
+  private readonly resetTimeout: number
+  private readonly successThreshold: number
+
+  constructor(
+    failureThreshold: number = 5,
+    resetTimeout: number = 60000,  // 1 minute
+    successThreshold: number = 2
+  ) {
+    this.failureThreshold = failureThreshold
+    this.resetTimeout = resetTimeout
+    this.successThreshold = successThreshold
+  }
+
+  async execute<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.state === CircuitState.OPEN) {
+      // Check if reset timeout has elapsed
+      if (Date.now() - this.lastFailureTime >= this.resetTimeout) {
+        console.log('Circuit breaker: transitioning to HALF_OPEN')
+        this.state = CircuitState.HALF_OPEN
+        this.successCount = 0
+      } else {
+        throw new Error('Circuit breaker is OPEN - operation rejected')
+      }
+    }
+
+    try {
+      const result = await operation()
+      this.onSuccess()
+      return result
+    } catch (error) {
+      this.onFailure()
+      throw error
+    }
+  }
+
+  private onSuccess() {
+    this.failureCount = 0
+
+    if (this.state === CircuitState.HALF_OPEN) {
+      this.successCount++
+      if (this.successCount >= this.successThreshold) {
+        console.log('Circuit breaker: transitioning to CLOSED')
+        this.state = CircuitState.CLOSED
+      }
+    }
+  }
+
+  private onFailure() {
+    this.failureCount++
+    this.lastFailureTime = Date.now()
+
+    if (this.failureCount >= this.failureThreshold) {
+      console.log('Circuit breaker: transitioning to OPEN')
+      this.state = CircuitState.OPEN
+    }
+  }
+
+  getState(): CircuitState {
+    return this.state
+  }
+}
+
+// Usage
+const circuitBreaker = new CircuitBreaker(
+  5,      // Open after 5 failures
+  60000,  // Reset after 1 minute
+  2       // Close after 2 successes
+)
+
+async function safeExecute(intent: any, quote: any) {
+  try {
+    return await circuitBreaker.execute(() =>
+      sip.execute(intent, quote)
+    )
+  } catch (error: any) {
+    if (error.message.includes('Circuit breaker is OPEN')) {
+      console.error('Service unavailable - circuit breaker open')
+      // Return cached result or fallback
+      return null
+    }
+    throw error
+  }
+}
+```
+
+### Step 5: Create Error Recovery Strategies
+
+Handle specific error scenarios with appropriate recovery:
+
+```typescript
+interface ErrorRecovery {
+  shouldRetry: boolean
+  delay?: number
+  fallback?: () => Promise<any>
+  userMessage: string
+}
+
+function determineRecovery(error: any): ErrorRecovery {
+  // Validation errors - don't retry, inform user
+  if (error instanceof ValidationError) {
+    return {
+      shouldRetry: false,
+      userMessage: `Invalid input: ${error.message}. Please check your inputs.`,
+    }
+  }
+
+  // Quote expired - retry with fresh quotes
+  if (error.code === ErrorCode.INTENT_EXPIRED) {
+    return {
+      shouldRetry: true,
+      delay: 0,
+      fallback: async () => {
+        // Fetch fresh quotes
+        console.log('Fetching fresh quotes...')
+        return null
+      },
+      userMessage: 'Quote expired. Fetching new quotes...',
+    }
+  }
+
+  // Network error - retry with backoff
+  if (error.code === 'NETWORK_ERROR' || error.code === 'TIMEOUT') {
+    return {
+      shouldRetry: true,
+      delay: 2000,
+      userMessage: 'Network error. Retrying...',
+    }
+  }
+
+  // Insufficient balance - don't retry
+  if (error.code === ErrorCode.INSUFFICIENT_BALANCE) {
+    return {
+      shouldRetry: false,
+      userMessage: 'Insufficient balance to complete this swap.',
+    }
+  }
+
+  // Decryption failed - wrong key
+  if (error instanceof CryptoError && error.code === ErrorCode.DECRYPTION_FAILED) {
+    return {
+      shouldRetry: false,
+      userMessage: 'Cannot decrypt transaction - invalid viewing key.',
+    }
+  }
+
+  // Unknown error - retry once
+  return {
+    shouldRetry: true,
+    delay: 1000,
+    userMessage: 'An error occurred. Retrying...',
+  }
+}
+
+// Usage
+async function executeWithRecovery(intent: any, quote: any) {
+  let attempt = 0
+  const maxAttempts = 3
+
+  while (attempt < maxAttempts) {
+    try {
+      return await sip.execute(intent, quote)
+    } catch (error: any) {
+      const recovery = determineRecovery(error)
+
+      console.log(`Attempt ${attempt + 1} failed:`, recovery.userMessage)
+
+      if (!recovery.shouldRetry || attempt === maxAttempts - 1) {
+        // Final failure
+        throw new Error(recovery.userMessage)
+      }
+
+      // Try recovery fallback
+      if (recovery.fallback) {
+        await recovery.fallback()
+      }
+
+      // Wait before retry
+      if (recovery.delay) {
+        await new Promise(resolve => setTimeout(resolve, recovery.delay))
+      }
+
+      attempt++
+    }
+  }
+}
+```
+
+## Complete Example
+
+Full error handling implementation:
+
+```typescript
+import {
+  SIP,
+  PrivacyLevel,
+  ValidationError,
+  CryptoError,
+  IntentError,
+  ErrorCode,
+} from '@sip-protocol/sdk'
+
+class RobustSwapExecutor {
+  private sip: SIP
+  private circuitBreaker: CircuitBreaker
+
+  constructor() {
+    this.sip = new SIP({ network: 'testnet', mode: 'demo' })
+    this.circuitBreaker = new CircuitBreaker(5, 60000, 2)
+  }
+
+  async executeSwap(
+    inputChain: string,
+    outputChain: string,
+    amount: bigint,
+    minOutput: bigint
+  ) {
+    // 1. Validate inputs
+    console.log('Step 1: Validating inputs...')
+    const validation = validateSwapInputs(
+      inputChain,
+      outputChain,
+      amount,
+      'shielded'
+    )
+
+    if (!validation.valid) {
+      throw new ValidationError(
+        validation.errors.join(', '),
+        'inputs'
+      )
+    }
+
+    // 2. Create intent with retry
+    console.log('Step 2: Creating intent...')
+    this.sip.generateStealthKeys(outputChain as any)
+    const recipient = this.sip.getStealthAddress()!
+
+    const intent = await executeWithRetry(
+      async () => {
+        return this.sip.intent()
+          .input(inputChain, 'TOKEN', amount)
+          .output(outputChain, 'TOKEN', minOutput)
+          .privacy(PrivacyLevel.SHIELDED)
+          .recipient(recipient)
+          .build()
+      },
+      {
+        maxRetries: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+      },
+      'createIntent'
+    )
+
+    // 3. Get quotes with retry
+    console.log('Step 3: Fetching quotes...')
+    const quotes = await executeWithRetry(
+      () => this.sip.getQuotes(intent),
+      {
+        maxRetries: 3,
+        delayMs: 1000,
+        backoffMultiplier: 2,
+      },
+      'getQuotes'
+    )
+
+    const bestQuote = quotes.sort((a, b) =>
+      Number(b.outputAmount - a.outputAmount)
+    )[0]
+
+    // 4. Execute with circuit breaker
+    console.log('Step 4: Executing swap...')
+    const tracked = {
+      ...intent,
+      status: 'pending' as const,
+      quotes: [],
+    }
+
+    try {
+      const result = await this.circuitBreaker.execute(() =>
+        this.sip.execute(tracked, bestQuote)
+      )
+      console.log('Swap succeeded!')
+      return result
+    } catch (error: any) {
+      console.error('Swap failed:', error.message)
+
+      // Determine recovery strategy
+      const recovery = determineRecovery(error)
+      console.log('Recovery strategy:', recovery.userMessage)
+
+      throw error
+    }
+  }
+}
+
+// Example usage
+async function demonstrateErrorHandling() {
+  const executor = new RobustSwapExecutor()
+
+  try {
+    const result = await executor.executeSwap(
+      'solana',
+      'zcash',
+      1_000_000_000n,
+      50_000_000n
+    )
+    console.log('Success:', result.status)
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      console.error('❌ Validation error:', error.message)
+    } else if (error instanceof CryptoError) {
+      console.error('❌ Crypto error:', error.message)
+    } else if (error instanceof IntentError) {
+      console.error('❌ Intent error:', error.message)
+    } else {
+      console.error('❌ Unknown error:', error)
+    }
+  }
+}
+
+demonstrateErrorHandling()
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Swallowing Errors
+
+```typescript
+// ❌ Wrong - error lost
+try {
+  await sip.execute(intent, quote)
+} catch (error) {
+  console.log('Error occurred')  // What error?
+}
+```
+
+```typescript
+// ✅ Correct - log details
+try {
+  await sip.execute(intent, quote)
+} catch (error: any) {
+  console.error('Execute failed:', {
+    message: error.message,
+    code: error.code,
+    details: error.details,
+  })
+  throw error
+}
+```
+
+### Pitfall 2: No Input Validation
+
+```typescript
+// ❌ Wrong - no validation
+const intent = await sip.intent()
+  .input(userInput.chain, 'TOKEN', userInput.amount)
+  .build()  // Fails with cryptic error
+```
+
+```typescript
+// ✅ Correct - validate first
+const validation = validateSwapInputs(
+  userInput.chain,
+  userInput.outputChain,
+  userInput.amount,
+  userInput.privacy
+)
+
+if (!validation.valid) {
+  throw new ValidationError(validation.errors.join(', '))
+}
+```
+
+### Pitfall 3: Infinite Retries
+
+```typescript
+// ❌ Wrong - retry forever
+while (true) {
+  try {
+    await execute()
+    break
+  } catch (error) {
+    // Retry forever
+  }
+}
+```
+
+```typescript
+// ✅ Correct - limited retries
+const maxRetries = 3
+for (let i = 0; i < maxRetries; i++) {
+  try {
+    await execute()
+    break
+  } catch (error) {
+    if (i === maxRetries - 1) throw error
+  }
+}
+```
+
+### Pitfall 4: Not Checking Error Types
+
+```typescript
+// ❌ Wrong - retry all errors
+try {
+  await execute()
+} catch (error) {
+  await retry()  // Even validation errors!
+}
+```
+
+```typescript
+// ✅ Correct - check if retryable
+try {
+  await execute()
+} catch (error: any) {
+  if (error instanceof ValidationError) {
+    throw error  // Don't retry
+  }
+  await retry()
+}
+```
+
+### Pitfall 5: Poor User Feedback
+
+```typescript
+// ❌ Wrong - generic message
+catch (error) {
+  alert('Error occurred')  // Not helpful
+}
+```
+
+```typescript
+// ✅ Correct - specific message
+catch (error: any) {
+  if (error.code === ErrorCode.INTENT_EXPIRED) {
+    alert('Quote expired. Please try again.')
+  } else if (error instanceof ValidationError) {
+    alert(`Invalid input: ${error.field}`)
+  } else {
+    alert(`Error: ${error.message}`)
+  }
+}
+```
+
+## Best Practices
+
+1. **Validate Early:** Check inputs before expensive operations
+2. **Type-Safe Errors:** Use error instanceof checks
+3. **Retry Transient:** Retry network errors, not validation errors
+4. **Circuit Breakers:** Prevent cascading failures
+5. **User Feedback:** Provide clear, actionable error messages
+6. **Logging:** Log error details for debugging
+7. **Graceful Degradation:** Provide fallbacks when possible
+
+## Next Steps
+
+- [Integrate with wallets](/cookbook/09-wallet-integration) with error handling
+- [Test error scenarios](/cookbook/10-testing-mocks) comprehensively
+- Learn about [error codes](/reference/errors) in detail

@@ -1,0 +1,484 @@
+---
+title: "Multi-Party Disclosure"
+description: "Learn how to enable multiple parties (auditors, regulators, compliance officers) to access transaction data with different viewing keys"
+---
+
+## Overview
+
+Multi-party disclosure allows you to encrypt the same transaction data for multiple authorized parties, each with their own viewing key. This is essential for complex compliance scenarios involving multiple regulators or stakeholders.
+
+## Prerequisites
+
+- Completed [Viewing Key Management](/cookbook/03-viewing-keys)
+- Understanding of key derivation
+- `@sip-protocol/sdk` installed
+
+## Step-by-Step
+
+### Step 1: Generate Keys for Multiple Parties
+
+Create separate viewing keys for each party that needs access:
+
+```typescript
+import { SIP } from '@sip-protocol/sdk'
+
+const sip = new SIP({ network: 'testnet', mode: 'demo' })
+
+// Generate master key for the organization
+const masterKey = sip.generateViewingKey('/m/44/501/0/company')
+
+// Derive keys for different parties
+const parties = {
+  taxAuthority: sip.deriveViewingKey(masterKey, 'disclosure/tax/federal'),
+  auditor: sip.deriveViewingKey(masterKey, 'disclosure/audit/external'),
+  compliance: sip.deriveViewingKey(masterKey, 'disclosure/compliance/aml'),
+  legal: sip.deriveViewingKey(masterKey, 'disclosure/legal/general'),
+}
+
+console.log('Generated keys for parties:', Object.keys(parties))
+// Output: ['taxAuthority', 'auditor', 'compliance', 'legal']
+```
+
+### Step 2: Encrypt for Multiple Parties
+
+Encrypt the same transaction data separately for each party:
+
+```typescript
+import { encryptForViewing, type TransactionData } from '@sip-protocol/sdk'
+
+// Transaction data to disclose
+const transactionData: TransactionData = {
+  sender: '0xCompanyTreasuryWallet',
+  recipient: '0xVendorPaymentAddress',
+  amount: '5000000000',  // 5 SOL
+  timestamp: Math.floor(Date.now() / 1000),
+}
+
+// Encrypt separately for each party
+const encryptedForParties = {
+  forTax: encryptForViewing(transactionData, parties.taxAuthority),
+  forAuditor: encryptForViewing(transactionData, parties.auditor),
+  forCompliance: encryptForViewing(transactionData, parties.compliance),
+  forLegal: encryptForViewing(transactionData, parties.legal),
+}
+
+console.log('Transaction encrypted for', Object.keys(encryptedForParties).length, 'parties')
+
+// Each encryption is unique - different ciphertext, nonce, key hash
+console.log('Ciphertexts are different:',
+  encryptedForParties.forTax.ciphertext !== encryptedForParties.forAuditor.ciphertext
+)  // true
+```
+
+### Step 3: Store Encrypted Data with Metadata
+
+Store encrypted data with metadata about which parties can access it:
+
+```typescript
+interface DisclosureRecord {
+  transactionId: string
+  createdAt: number
+  encryptedData: {
+    ciphertext: string
+    nonce: string
+    viewingKeyHash: string
+  }
+  authorizedParty: string
+  expiresAt?: number
+}
+
+// Create disclosure records
+const disclosureRecords: DisclosureRecord[] = [
+  {
+    transactionId: 'tx-001',
+    createdAt: Date.now(),
+    encryptedData: encryptedForParties.forTax,
+    authorizedParty: 'Tax Authority (Federal)',
+    expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000),  // 1 year
+  },
+  {
+    transactionId: 'tx-001',
+    createdAt: Date.now(),
+    encryptedData: encryptedForParties.forAuditor,
+    authorizedParty: 'External Auditor',
+    expiresAt: Date.now() + (90 * 24 * 60 * 60 * 1000),  // 90 days
+  },
+  {
+    transactionId: 'tx-001',
+    createdAt: Date.now(),
+    encryptedData: encryptedForParties.forCompliance,
+    authorizedParty: 'Compliance Officer (AML)',
+  },
+  {
+    transactionId: 'tx-001',
+    createdAt: Date.now(),
+    encryptedData: encryptedForParties.forLegal,
+    authorizedParty: 'Legal Department',
+  },
+]
+
+// Store in database
+// await database.disclosures.insertMany(disclosureRecords)
+
+console.log('Stored', disclosureRecords.length, 'disclosure records')
+```
+
+### Step 4: Party-Specific Decryption
+
+Each party can only decrypt their copy of the data:
+
+```typescript
+import { decryptWithViewing } from '@sip-protocol/sdk'
+
+// Tax authority decrypts their copy
+console.log('\n--- Tax Authority Access ---')
+try {
+  const taxData = decryptWithViewing(
+    encryptedForParties.forTax,
+    parties.taxAuthority
+  )
+  console.log('Tax authority can see:', {
+    amount: taxData.amount,
+    timestamp: new Date(taxData.timestamp * 1000).toISOString(),
+  })
+} catch (error) {
+  console.error('Tax authority: Access denied')
+}
+
+// Tax authority CANNOT decrypt auditor's copy
+console.log('\n--- Tax Authority Tries Auditor Data ---')
+try {
+  decryptWithViewing(encryptedForParties.forAuditor, parties.taxAuthority)
+  console.log('Tax authority: Unexpected access to auditor data!')
+} catch (error) {
+  console.log('Tax authority: Cannot access auditor data ✓')
+}
+
+// Auditor decrypts their copy
+console.log('\n--- External Auditor Access ---')
+try {
+  const auditorData = decryptWithViewing(
+    encryptedForParties.forAuditor,
+    parties.auditor
+  )
+  console.log('Auditor can see:', {
+    sender: auditorData.sender,
+    recipient: auditorData.recipient,
+    amount: auditorData.amount,
+  })
+} catch (error) {
+  console.error('Auditor: Access denied')
+}
+```
+
+### Step 5: Bulk Disclosure Management
+
+Manage disclosures for multiple transactions:
+
+```typescript
+interface TransactionWithDisclosures {
+  transactionId: string
+  timestamp: number
+  encryptedForParties: Map<string, ReturnType<typeof encryptForViewing>>
+}
+
+async function createBulkDisclosures(
+  transactions: TransactionData[],
+  parties: Record<string, any>
+) {
+  const disclosures: TransactionWithDisclosures[] = []
+
+  for (const tx of transactions) {
+    const txDisclosures = new Map()
+
+    // Encrypt for each party
+    for (const [partyName, partyKey] of Object.entries(parties)) {
+      const encrypted = encryptForViewing(tx, partyKey)
+      txDisclosures.set(partyName, encrypted)
+    }
+
+    disclosures.push({
+      transactionId: `tx-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      timestamp: tx.timestamp,
+      encryptedForParties: txDisclosures,
+    })
+  }
+
+  return disclosures
+}
+
+// Example usage
+const transactions: TransactionData[] = [
+  {
+    sender: '0xCompany',
+    recipient: '0xVendor1',
+    amount: '1000000000',
+    timestamp: Math.floor(Date.now() / 1000),
+  },
+  {
+    sender: '0xCompany',
+    recipient: '0xVendor2',
+    amount: '2000000000',
+    timestamp: Math.floor(Date.now() / 1000),
+  },
+]
+
+const bulkDisclosures = await createBulkDisclosures(transactions, parties)
+console.log(`Created disclosures for ${bulkDisclosures.length} transactions`)
+```
+
+## Complete Example
+
+Full implementation of multi-party disclosure system:
+
+```typescript
+import {
+  SIP,
+  encryptForViewing,
+  decryptWithViewing,
+  type TransactionData,
+} from '@sip-protocol/sdk'
+
+class MultiPartyDisclosure {
+  private sip: SIP
+  private parties: Map<string, any>
+
+  constructor() {
+    this.sip = new SIP({ network: 'testnet', mode: 'demo' })
+    this.parties = new Map()
+  }
+
+  // Add authorized party
+  addParty(name: string, derivationPath: string, masterKey: any) {
+    const partyKey = this.sip.deriveViewingKey(masterKey, derivationPath)
+    this.parties.set(name, partyKey)
+    console.log(`Added party: ${name} (${partyKey.path})`)
+  }
+
+  // Encrypt transaction for all parties
+  encryptForAll(tx: TransactionData) {
+    const encrypted = new Map()
+
+    for (const [name, key] of this.parties) {
+      encrypted.set(name, encryptForViewing(tx, key))
+    }
+
+    return {
+      transactionId: `tx-${Date.now()}`,
+      timestamp: tx.timestamp,
+      encrypted,
+    }
+  }
+
+  // Decrypt for specific party
+  decryptFor(partyName: string, encryptedData: any) {
+    const partyKey = this.parties.get(partyName)
+    if (!partyKey) {
+      throw new Error(`Unknown party: ${partyName}`)
+    }
+
+    return decryptWithViewing(encryptedData, partyKey)
+  }
+
+  // List all parties
+  listParties() {
+    return Array.from(this.parties.keys())
+  }
+}
+
+// Usage
+async function demonstrateMultiPartyDisclosure() {
+  const disclosure = new MultiPartyDisclosure()
+
+  // Set up master key
+  const masterKey = disclosure['sip'].generateViewingKey('/m/44/501/0/disclosure')
+
+  // Add parties
+  disclosure.addParty('Federal Tax Authority', 'tax/federal', masterKey)
+  disclosure.addParty('External Auditor', 'audit/external', masterKey)
+  disclosure.addParty('AML Compliance', 'compliance/aml', masterKey)
+  disclosure.addParty('Legal Department', 'legal/general', masterKey)
+
+  // Transaction to disclose
+  const transaction: TransactionData = {
+    sender: '0xCompanyWallet',
+    recipient: '0xPartnerWallet',
+    amount: '10000000000',  // 10 SOL
+    timestamp: Math.floor(Date.now() / 1000),
+  }
+
+  // Encrypt for all parties
+  const record = disclosure.encryptForAll(transaction)
+  console.log('\nTransaction encrypted for parties:', disclosure.listParties())
+
+  // Each party decrypts their copy
+  console.log('\n--- Party Access Verification ---')
+  for (const party of disclosure.listParties()) {
+    try {
+      const encrypted = record.encrypted.get(party)
+      const decrypted = disclosure.decryptFor(party, encrypted)
+      console.log(`${party}: ✓ Access granted`)
+      console.log(`  Amount: ${decrypted.amount}`)
+    } catch (error) {
+      console.log(`${party}: ✗ Access denied`)
+    }
+  }
+
+  return record
+}
+
+demonstrateMultiPartyDisclosure()
+  .then(() => console.log('\nMulti-party disclosure complete'))
+  .catch(err => console.error('Error:', err))
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Using Same Nonce for Multiple Parties
+
+**Problem:** Reusing encryption result instead of encrypting separately.
+
+```typescript
+// ❌ Wrong - sharing same encrypted data
+const encrypted = encryptForViewing(tx, parties.taxAuthority)
+const disclosures = {
+  tax: encrypted,
+  auditor: encrypted,  // Same object!
+}
+// Now both parties use same nonce - security issue
+```
+
+**Solution:** Encrypt separately for each party.
+
+```typescript
+// ✅ Correct - separate encryption per party
+const disclosures = {
+  tax: encryptForViewing(tx, parties.taxAuthority),
+  auditor: encryptForViewing(tx, parties.auditor),
+}
+// Each has unique nonce and ciphertext
+```
+
+### Pitfall 2: Not Tracking Which Party Can Access What
+
+**Problem:** Storing encrypted data without metadata.
+
+```typescript
+// ❌ Wrong - can't tell which key decrypts this
+await db.store({ encrypted: ciphertext })
+// Later: which party is this for?
+```
+
+**Solution:** Store metadata about authorized parties.
+
+```typescript
+// ✅ Correct - track authorized party
+await db.store({
+  encrypted: ciphertext,
+  viewingKeyHash: encrypted.viewingKeyHash,
+  authorizedParty: 'Tax Authority',
+  createdAt: Date.now(),
+})
+```
+
+### Pitfall 3: Over-Sharing with Too Many Parties
+
+**Problem:** Encrypting for everyone "just in case".
+
+```typescript
+// ❌ Wrong - unnecessary disclosure
+const parties = [
+  'tax', 'auditor', 'compliance', 'legal', 'hr',
+  'marketing', 'sales', 'support', 'intern'
+]
+// Does the intern really need access?
+```
+
+**Solution:** Follow principle of least privilege.
+
+```typescript
+// ✅ Correct - only necessary parties
+const necessaryParties = ['tax', 'auditor', 'compliance']
+// Only those who need to know
+```
+
+### Pitfall 4: Not Implementing Revocation
+
+**Problem:** No way to revoke access after disclosure.
+
+```typescript
+// ❌ Wrong - once disclosed, can't revoke
+const encrypted = encryptForViewing(tx, partyKey)
+await sendToParty(encrypted)
+// If party relationship ends, they still have access
+```
+
+**Solution:** Implement expiration and revocation.
+
+```typescript
+// ✅ Correct - add expiration
+interface TimedDisclosure {
+  encrypted: any
+  expiresAt: number
+  revoked: boolean
+}
+
+const disclosure: TimedDisclosure = {
+  encrypted: encryptForViewing(tx, partyKey),
+  expiresAt: Date.now() + (90 * 24 * 60 * 60 * 1000),  // 90 days
+  revoked: false,
+}
+
+// Check before allowing access
+if (disclosure.revoked || Date.now() > disclosure.expiresAt) {
+  throw new Error('Disclosure expired or revoked')
+}
+```
+
+### Pitfall 5: Not Auditing Access
+
+**Problem:** No log of who accessed what data.
+
+```typescript
+// ❌ Wrong - no audit trail
+const data = decryptWithViewing(encrypted, partyKey)
+// Who accessed this? When? For what purpose?
+```
+
+**Solution:** Log all access attempts.
+
+```typescript
+// ✅ Correct - audit all access
+async function auditedDecrypt(
+  encrypted: any,
+  partyKey: any,
+  partyName: string,
+  purpose: string
+) {
+  await auditLog.record({
+    party: partyName,
+    viewingKeyHash: encrypted.viewingKeyHash,
+    timestamp: Date.now(),
+    purpose,
+    success: true,
+  })
+
+  return decryptWithViewing(encrypted, partyKey)
+}
+```
+
+## Best Practices
+
+1. **Separate Encryptions:** Always encrypt separately for each party
+2. **Metadata:** Track who can access what and why
+3. **Least Privilege:** Only disclose to parties that need to know
+4. **Expiration:** Set reasonable expiration times
+5. **Audit Logs:** Log all disclosure creation and access
+6. **Revocation:** Implement ability to revoke access
+7. **Key Rotation:** Rotate viewing keys periodically
+
+## Next Steps
+
+- [Implement stealth address scanning](/cookbook/05-stealth-scanning) for recipients
+- [Build compliance reporting](/cookbook/06-compliance-reporting) workflows
+- [Handle batch transactions](/cookbook/07-batch-transactions) efficiently

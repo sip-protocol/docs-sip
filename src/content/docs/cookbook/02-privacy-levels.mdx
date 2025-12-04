@@ -1,0 +1,347 @@
+---
+title: "Custom Privacy Levels"
+description: "Learn how to choose and implement different privacy levels (transparent, shielded, compliant) for your use case"
+---
+
+## Overview
+
+SIP Protocol supports three privacy levels: **transparent**, **shielded**, and **compliant**. This recipe shows how to choose and implement the right privacy level for your needs.
+
+## Prerequisites
+
+- Completed the [Basic Swap](/cookbook/01-basic-swap) recipe
+- Understanding of privacy trade-offs
+
+## Privacy Levels Explained
+
+| Level | Sender Hidden | Amount Hidden | Recipient Hidden | Viewing Key Required | Use Case |
+|-------|--------------|---------------|-----------------|---------------------|----------|
+| `transparent` | No | No | No | No | Public transactions, debugging |
+| `shielded` | Yes | Yes | Yes | No | Full privacy, no compliance |
+| `compliant` | Yes | Yes | Yes | Yes | Privacy with audit capability |
+
+## Step-by-Step
+
+### Step 1: Transparent Mode (No Privacy)
+
+Use transparent mode for public transactions or testing:
+
+```typescript
+import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
+
+const sip = new SIP({ network: 'testnet', mode: 'demo' })
+
+// Transparent swap - everything is public
+const transparentIntent = await sip.intent()
+  .input('solana', 'SOL', 1_000_000_000n)
+  .output('ethereum', 'ETH', 50_000_000_000_000_000n)
+  .privacy(PrivacyLevel.TRANSPARENT)
+  .slippage(1)
+  .build()
+
+console.log('Privacy level:', transparentIntent.privacyLevel)
+// Output: "transparent"
+
+// No stealth address needed for transparent mode
+console.log('Has stealth address:', !!transparentIntent.recipientStealth)
+// Output: false (placeholder only)
+
+// Execute and get public transaction hash
+const quotes = await sip.getQuotes(transparentIntent)
+const tracked = { ...transparentIntent, status: 'pending' as const, quotes: [] }
+const result = await sip.execute(tracked, quotes[0])
+
+console.log('Transaction hash:', result.txHash)
+// Output: 0x1234... (visible to everyone)
+```
+
+### Step 2: Shielded Mode (Full Privacy)
+
+Use shielded mode for maximum privacy with no compliance requirements:
+
+```typescript
+// Generate stealth keys for recipient
+sip.generateStealthKeys('zcash', 'private-wallet')
+const recipientAddress = sip.getStealthAddress()!
+
+// Shielded swap - sender, amount, recipient all hidden
+const shieldedIntent = await sip.intent()
+  .input('ethereum', 'ETH', 1_000_000_000_000_000_000n)
+  .output('zcash', 'ZEC', 50_000_000n)
+  .privacy(PrivacyLevel.SHIELDED)
+  .recipient(recipientAddress)
+  .slippage(1)
+  .build()
+
+console.log('Privacy level:', shieldedIntent.privacyLevel)
+// Output: "shielded"
+
+console.log('Sender hidden:', !!shieldedIntent.senderCommitment)
+// Output: true (only commitment visible)
+
+console.log('Amount hidden:', !!shieldedIntent.inputCommitment)
+// Output: true (only commitment visible)
+
+console.log('Recipient hidden:', !!shieldedIntent.recipientStealth)
+// Output: true (one-time stealth address)
+
+// Execute - no transaction hash returned for privacy
+const quotes = await sip.getQuotes(shieldedIntent)
+const tracked = { ...shieldedIntent, status: 'pending' as const, quotes: [] }
+const result = await sip.execute(tracked, quotes[0])
+
+console.log('Transaction hash:', result.txHash)
+// Output: undefined (hidden for privacy)
+```
+
+### Step 3: Compliant Mode (Privacy + Audit)
+
+Use compliant mode when you need privacy but also audit capability:
+
+```typescript
+// Generate viewing key for auditors
+const viewingKey = sip.generateViewingKey('/m/44/501/0/compliance')
+
+console.log('Viewing key:', {
+  key: viewingKey.key.slice(0, 20) + '...',
+  hash: viewingKey.hash.slice(0, 20) + '...',
+  path: viewingKey.path,
+})
+
+// Generate stealth keys
+sip.generateStealthKeys('near', 'compliant-wallet')
+const recipientAddress = sip.getStealthAddress()!
+
+// Compliant swap - private but auditable
+const compliantIntent = await sip.intent()
+  .input('solana', 'SOL', 1_000_000_000n)
+  .output('near', 'NEAR', 100_000_000n)
+  .privacy(PrivacyLevel.COMPLIANT)
+  .recipient(recipientAddress)
+  .slippage(1)
+  .build()
+
+// But wait - we need to pass the viewing key during creation!
+// Use createShieldedIntent directly for more control:
+import { createShieldedIntent } from '@sip-protocol/sdk'
+
+const compliantIntentWithKey = await createShieldedIntent({
+  input: {
+    asset: { chain: 'solana', symbol: 'SOL', address: null, decimals: 9 },
+    amount: 1_000_000_000n,
+  },
+  output: {
+    asset: { chain: 'near', symbol: 'NEAR', address: null, decimals: 24 },
+    minAmount: 100_000_000n,
+    maxSlippage: 0.01,
+  },
+  privacy: PrivacyLevel.COMPLIANT,
+  viewingKey: viewingKey.key,
+  recipientMetaAddress: recipientAddress,
+  ttl: 300,
+})
+
+console.log('Viewing key hash included:', !!compliantIntentWithKey.viewingKeyHash)
+// Output: true
+
+console.log('Privacy maintained:', {
+  senderHidden: !!compliantIntentWithKey.senderCommitment,
+  amountHidden: !!compliantIntentWithKey.inputCommitment,
+  recipientHidden: !!compliantIntentWithKey.recipientStealth,
+})
+// Output: { senderHidden: true, amountHidden: true, recipientHidden: true }
+```
+
+## Complete Example
+
+Compare all three privacy levels side-by-side:
+
+```typescript
+import { SIP, PrivacyLevel, createShieldedIntent } from '@sip-protocol/sdk'
+
+async function comparePrivacyLevels() {
+  const sip = new SIP({ network: 'testnet', mode: 'demo' })
+
+  // Common input parameters
+  const inputAsset = { chain: 'solana' as const, symbol: 'SOL', address: null, decimals: 9 }
+  const outputAsset = { chain: 'zcash' as const, symbol: 'ZEC', address: null, decimals: 8 }
+  const amount = 1_000_000_000n
+  const minOutput = 50_000_000n
+
+  // 1. TRANSPARENT - Public transaction
+  console.log('\n1. TRANSPARENT MODE')
+  const transparentIntent = await sip.intent()
+    .input('solana', 'SOL', amount)
+    .output('zcash', 'ZEC', minOutput)
+    .privacy(PrivacyLevel.TRANSPARENT)
+    .build()
+
+  console.log('Sender visible:', !transparentIntent.senderCommitment)
+  console.log('Amount visible:', !transparentIntent.inputCommitment)
+
+  // 2. SHIELDED - Full privacy
+  console.log('\n2. SHIELDED MODE')
+  sip.generateStealthKeys('zcash')
+  const recipientAddr = sip.getStealthAddress()!
+
+  const shieldedIntent = await sip.intent()
+    .input('solana', 'SOL', amount)
+    .output('zcash', 'ZEC', minOutput)
+    .privacy(PrivacyLevel.SHIELDED)
+    .recipient(recipientAddr)
+    .build()
+
+  console.log('Sender hidden:', !!shieldedIntent.senderCommitment)
+  console.log('Amount hidden:', !!shieldedIntent.inputCommitment)
+  console.log('Recipient hidden:', !!shieldedIntent.recipientStealth)
+  console.log('Viewing key:', shieldedIntent.viewingKeyHash === undefined)
+
+  // 3. COMPLIANT - Privacy with audit
+  console.log('\n3. COMPLIANT MODE')
+  const viewingKey = sip.generateViewingKey('/m/44/501/0')
+
+  const compliantIntent = await createShieldedIntent({
+    input: { asset: inputAsset, amount },
+    output: { asset: outputAsset, minAmount: minOutput, maxSlippage: 0.01 },
+    privacy: PrivacyLevel.COMPLIANT,
+    viewingKey: viewingKey.key,
+    recipientMetaAddress: recipientAddr,
+    ttl: 300,
+  })
+
+  console.log('Sender hidden:', !!compliantIntent.senderCommitment)
+  console.log('Amount hidden:', !!compliantIntent.inputCommitment)
+  console.log('Recipient hidden:', !!compliantIntent.recipientStealth)
+  console.log('Viewing key included:', !!compliantIntent.viewingKeyHash)
+  console.log('Auditable:', compliantIntent.viewingKeyHash === viewingKey.hash)
+
+  return { transparentIntent, shieldedIntent, compliantIntent }
+}
+
+comparePrivacyLevels()
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Using Shielded Mode Without Stealth Address
+
+**Problem:** Setting privacy to SHIELDED but forgetting the recipient address.
+
+```typescript
+// ❌ Wrong - no recipient for shielded mode
+const intent = await sip.intent()
+  .input('solana', 'SOL', 1_000_000_000n)
+  .output('zcash', 'ZEC', 50_000_000n)
+  .privacy(PrivacyLevel.SHIELDED)
+  .build()  // May fail or use placeholder
+```
+
+**Solution:** Always generate stealth keys and set recipient for shielded/compliant modes.
+
+```typescript
+// ✅ Correct
+sip.generateStealthKeys('zcash')
+const recipient = sip.getStealthAddress()!
+
+const intent = await sip.intent()
+  .input('solana', 'SOL', 1_000_000_000n)
+  .output('zcash', 'ZEC', 50_000_000n)
+  .privacy(PrivacyLevel.SHIELDED)
+  .recipient(recipient)
+  .build()
+```
+
+### Pitfall 2: Using Compliant Mode Without Viewing Key
+
+**Problem:** Setting privacy to COMPLIANT but not providing a viewing key.
+
+```typescript
+// ❌ Wrong - compliant mode requires viewing key
+const intent = await sip.intent()
+  .privacy(PrivacyLevel.COMPLIANT)
+  .build()  // Error: viewingKey required for compliant mode
+```
+
+**Solution:** Generate and provide viewing key for compliant mode.
+
+```typescript
+// ✅ Correct
+const viewingKey = sip.generateViewingKey()
+const intent = await createShieldedIntent({
+  // ... other params
+  privacy: PrivacyLevel.COMPLIANT,
+  viewingKey: viewingKey.key,
+})
+```
+
+### Pitfall 3: Expecting Transaction Hash in Shielded Mode
+
+**Problem:** Assuming you'll get a transaction hash for shielded swaps.
+
+```typescript
+// ❌ Wrong assumption
+const result = await sip.execute(trackedIntent, quote)
+console.log(result.txHash)  // undefined in shielded mode!
+```
+
+**Solution:** Only expect transaction hashes in transparent mode.
+
+```typescript
+// ✅ Correct - check privacy level
+if (intent.privacyLevel === PrivacyLevel.TRANSPARENT) {
+  console.log('Transaction hash:', result.txHash)
+} else {
+  console.log('Private transaction - no hash available')
+}
+```
+
+### Pitfall 4: Reusing Viewing Keys Inappropriately
+
+**Problem:** Using the same viewing key for all transactions.
+
+```typescript
+// ❌ Wrong - same key for everything
+const masterKey = sip.generateViewingKey()
+
+// All transactions use same key - poor key hygiene
+const intent1 = await createShieldedIntent({ viewingKey: masterKey.key, ... })
+const intent2 = await createShieldedIntent({ viewingKey: masterKey.key, ... })
+```
+
+**Solution:** Derive unique viewing keys for different scopes.
+
+```typescript
+// ✅ Correct - derive keys per use case
+const masterKey = sip.generateViewingKey('/m/44/501/0')
+const taxKey = sip.deriveViewingKey(masterKey, 'tax/2024')
+const auditKey = sip.deriveViewingKey(masterKey, 'audit/q1')
+
+const taxIntent = await createShieldedIntent({ viewingKey: taxKey.key, ... })
+const auditIntent = await createShieldedIntent({ viewingKey: auditKey.key, ... })
+```
+
+## When to Use Each Level
+
+### Use TRANSPARENT when:
+- Testing and debugging
+- Public grants or donations
+- Transparent compliance required
+- No privacy concerns
+
+### Use SHIELDED when:
+- Maximum privacy needed
+- No regulatory requirements
+- Personal transactions
+- Privacy-focused applications
+
+### Use COMPLIANT when:
+- Business transactions
+- Regulatory compliance needed
+- Audit trails required
+- Privacy with accountability
+
+## Next Steps
+
+- [Manage viewing keys](/cookbook/03-viewing-keys) for compliant mode
+- [Enable multi-party disclosure](/cookbook/04-multi-party-disclosure) for complex compliance
+- [Handle errors gracefully](/cookbook/08-error-handling) across privacy levels

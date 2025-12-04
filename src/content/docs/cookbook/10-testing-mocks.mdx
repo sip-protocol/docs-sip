@@ -1,0 +1,634 @@
+---
+title: "Testing with Mocks"
+description: "Learn how to test SIP integrations using mock providers, wallets, and test fixtures"
+---
+
+## Overview
+
+Comprehensive testing is essential for production applications. This recipe shows how to use mock proof providers, wallet adapters, and test fixtures to thoroughly test your SIP integration.
+
+## Prerequisites
+
+- Completed [Basic Swap](/cookbook/01-basic-swap)
+- Familiarity with testing frameworks (Vitest/Jest)
+- `@sip-protocol/sdk` installed
+
+## Step-by-Step
+
+### Step 1: Set Up Test Environment
+
+Configure your test environment with the demo mode SDK:
+
+```typescript
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { SIP, PrivacyLevel, MockProofProvider } from '@sip-protocol/sdk'
+
+describe('SIP Integration Tests', () => {
+  let sip: SIP
+  let mockProvider: MockProofProvider
+
+  beforeEach(() => {
+    // Create SIP instance in demo mode for testing
+    sip = new SIP({
+      network: 'testnet',
+      mode: 'demo',  // Uses mock data, no real network calls
+    })
+
+    // Create mock proof provider
+    mockProvider = new MockProofProvider()
+
+    // Set proof provider
+    sip.setProofProvider(mockProvider)
+
+    console.log('Test setup complete')
+  })
+
+  afterEach(() => {
+    // Cleanup
+    sip.disconnect()
+  })
+
+  it('should create a basic shielded intent', async () => {
+    // Generate stealth keys
+    sip.generateStealthKeys('zcash', 'test-wallet')
+    const recipient = sip.getStealthAddress()!
+
+    // Create intent
+    const intent = await sip.intent()
+      .input('solana', 'SOL', 1_000_000_000n)
+      .output('zcash', 'ZEC', 50_000_000n)
+      .privacy(PrivacyLevel.SHIELDED)
+      .recipient(recipient)
+      .build()
+
+    // Assertions
+    expect(intent.intentId).toBeDefined()
+    expect(intent.privacyLevel).toBe(PrivacyLevel.SHIELDED)
+    expect(intent.minOutputAmount).toBe(50_000_000n)
+  })
+})
+```
+
+### Step 2: Create Mock Wallet Adapter
+
+Build a mock wallet for testing:
+
+```typescript
+import type { WalletAdapter, ChainId } from '@sip-protocol/sdk'
+
+class MockWalletAdapter implements WalletAdapter {
+  chain: ChainId
+  address: string
+  private connected: boolean = false
+
+  constructor(chain: ChainId = 'solana', address: string = '0xMockWallet123') {
+    this.chain = chain
+    this.address = address
+  }
+
+  async connect(): Promise<void> {
+    this.connected = true
+    console.log('Mock wallet connected:', this.address)
+  }
+
+  async disconnect(): Promise<void> {
+    this.connected = false
+    console.log('Mock wallet disconnected')
+  }
+
+  async signMessage(message: string): Promise<string> {
+    if (!this.connected) {
+      throw new Error('Wallet not connected')
+    }
+
+    // Return mock signature
+    return `0xMockSignature_${message.slice(0, 10)}`
+  }
+
+  async signTransaction(tx: unknown): Promise<unknown> {
+    if (!this.connected) {
+      throw new Error('Wallet not connected')
+    }
+
+    // Return signed transaction (mock)
+    return { ...tx, signed: true, signature: '0xMockSig' }
+  }
+
+  async sendTransaction(tx: unknown): Promise<string> {
+    if (!this.connected) {
+      throw new Error('Wallet not connected')
+    }
+
+    // Return mock transaction hash
+    return `0xMockTxHash_${Date.now()}`
+  }
+
+  isConnected(): boolean {
+    return this.connected
+  }
+
+  // Test helper to simulate disconnection
+  simulateDisconnect(): void {
+    this.connected = false
+  }
+
+  // Test helper to simulate account change
+  simulateAccountChange(newAddress: string): void {
+    this.address = newAddress
+  }
+}
+
+// Usage in tests
+describe('Wallet Integration Tests', () => {
+  let sip: SIP
+  let mockWallet: MockWalletAdapter
+
+  beforeEach(() => {
+    sip = new SIP({ network: 'testnet', mode: 'demo' })
+    mockWallet = new MockWalletAdapter('solana', '0xTestAddress')
+  })
+
+  it('should connect mock wallet', async () => {
+    await mockWallet.connect()
+    expect(mockWallet.isConnected()).toBe(true)
+
+    sip.connect(mockWallet)
+    expect(sip.isConnected()).toBe(true)
+    expect(sip.getWallet()?.address).toBe('0xTestAddress')
+  })
+
+  it('should sign message with mock wallet', async () => {
+    await mockWallet.connect()
+
+    const message = 'Test message'
+    const signature = await mockWallet.signMessage(message)
+
+    expect(signature).toContain('0xMockSignature')
+  })
+
+  it('should handle wallet disconnection', async () => {
+    await mockWallet.connect()
+    sip.connect(mockWallet)
+
+    mockWallet.simulateDisconnect()
+
+    expect(mockWallet.isConnected()).toBe(false)
+  })
+})
+```
+
+### Step 3: Test Complete Swap Flow
+
+Test the full swap lifecycle with mocks:
+
+```typescript
+describe('Complete Swap Flow', () => {
+  let sip: SIP
+  let mockWallet: MockWalletAdapter
+
+  beforeEach(async () => {
+    sip = new SIP({ network: 'testnet', mode: 'demo' })
+    mockWallet = new MockWalletAdapter('solana')
+    await mockWallet.connect()
+    sip.connect(mockWallet)
+  })
+
+  it('should execute complete swap flow', async () => {
+    // 1. Generate stealth keys
+    sip.generateStealthKeys('zcash')
+    const recipient = sip.getStealthAddress()!
+    expect(recipient).toMatch(/^sip:zcash:/)
+
+    // 2. Create intent
+    const intent = await sip.intent()
+      .input('solana', 'SOL', 1_000_000_000n)
+      .output('zcash', 'ZEC', 50_000_000n)
+      .privacy(PrivacyLevel.SHIELDED)
+      .recipient(recipient)
+      .build()
+
+    expect(intent.intentId).toBeDefined()
+    expect(intent.privacyLevel).toBe(PrivacyLevel.SHIELDED)
+
+    // 3. Get quotes
+    const quotes = await sip.getQuotes(intent)
+    expect(quotes.length).toBeGreaterThan(0)
+
+    const bestQuote = quotes.sort((a, b) =>
+      Number(b.outputAmount - a.outputAmount)
+    )[0]
+
+    expect(bestQuote.outputAmount).toBeGreaterThanOrEqual(intent.minOutputAmount)
+
+    // 4. Execute swap
+    const tracked = {
+      ...intent,
+      status: 'pending' as const,
+      quotes: [],
+    }
+
+    const result = await sip.execute(tracked, bestQuote)
+
+    expect(result.status).toBe('fulfilled')
+    expect(result.outputAmount).toBeDefined()
+
+    // In shielded mode, txHash is undefined
+    expect(result.txHash).toBeUndefined()
+  })
+
+  it('should handle multiple concurrent swaps', async () => {
+    const swaps = [
+      { output: 'zcash', amount: 1_000_000_000n, min: 50_000_000n },
+      { output: 'ethereum', amount: 2_000_000_000n, min: 100_000_000_000_000_000n },
+      { output: 'near', amount: 500_000_000n, min: 50_000_000n },
+    ]
+
+    // Create all intents in parallel
+    const intents = await Promise.all(
+      swaps.map(async swap => {
+        sip.generateStealthKeys(swap.output as any)
+        const recipient = sip.getStealthAddress()!
+
+        return sip.intent()
+          .input('solana', 'SOL', swap.amount)
+          .output(swap.output, 'TOKEN', swap.min)
+          .privacy(PrivacyLevel.SHIELDED)
+          .recipient(recipient)
+          .build()
+      })
+    )
+
+    expect(intents).toHaveLength(3)
+
+    // All intents should have unique IDs
+    const intentIds = intents.map(i => i.intentId)
+    const uniqueIds = new Set(intentIds)
+    expect(uniqueIds.size).toBe(3)
+  })
+})
+```
+
+### Step 4: Test Privacy Features
+
+Test encryption, viewing keys, and compliance:
+
+```typescript
+import {
+  generateViewingKey,
+  deriveViewingKey,
+  encryptForViewing,
+  decryptWithViewing,
+  type TransactionData,
+} from '@sip-protocol/sdk'
+
+describe('Privacy Features', () => {
+  let sip: SIP
+
+  beforeEach(() => {
+    sip = new SIP({ network: 'testnet', mode: 'demo' })
+  })
+
+  it('should generate and derive viewing keys', () => {
+    // Generate master key
+    const masterKey = sip.generateViewingKey('/m/44/501/0')
+    expect(masterKey.key).toMatch(/^0x[0-9a-f]{64}$/i)
+    expect(masterKey.hash).toMatch(/^0x[0-9a-f]{64}$/i)
+    expect(masterKey.path).toBe('/m/44/501/0')
+
+    // Derive child key
+    const childKey = sip.deriveViewingKey(masterKey, 'audit/2024')
+    expect(childKey.key).not.toBe(masterKey.key)
+    expect(childKey.path).toBe('/m/44/501/0/audit/2024')
+  })
+
+  it('should encrypt and decrypt transaction data', () => {
+    const viewingKey = generateViewingKey('/m/0')
+
+    const txData: TransactionData = {
+      sender: '0xSenderAddress',
+      recipient: '0xRecipientAddress',
+      amount: '1000000000',
+      timestamp: Math.floor(Date.now() / 1000),
+    }
+
+    // Encrypt
+    const encrypted = encryptForViewing(txData, viewingKey)
+    expect(encrypted.ciphertext).toBeDefined()
+    expect(encrypted.nonce).toBeDefined()
+    expect(encrypted.viewingKeyHash).toBe(viewingKey.hash)
+
+    // Decrypt
+    const decrypted = decryptWithViewing(encrypted, viewingKey)
+    expect(decrypted.sender).toBe(txData.sender)
+    expect(decrypted.recipient).toBe(txData.recipient)
+    expect(decrypted.amount).toBe(txData.amount)
+  })
+
+  it('should fail decryption with wrong key', () => {
+    const correctKey = generateViewingKey('/m/0')
+    const wrongKey = generateViewingKey('/m/1')
+
+    const txData: TransactionData = {
+      sender: '0xSender',
+      recipient: '0xRecipient',
+      amount: '100',
+      timestamp: Date.now(),
+    }
+
+    const encrypted = encryptForViewing(txData, correctKey)
+
+    // Should throw when decrypting with wrong key
+    expect(() => {
+      decryptWithViewing(encrypted, wrongKey)
+    }).toThrow()
+  })
+})
+```
+
+### Step 5: Test Error Scenarios
+
+Test validation and error handling:
+
+```typescript
+import { ValidationError, IntentError } from '@sip-protocol/sdk'
+
+describe('Error Handling', () => {
+  let sip: SIP
+
+  beforeEach(() => {
+    sip = new SIP({ network: 'testnet', mode: 'demo' })
+  })
+
+  it('should reject invalid chain', async () => {
+    await expect(async () => {
+      await sip.intent()
+        .input('invalid-chain', 'TOKEN', 1_000_000_000n)
+        .build()
+    }).rejects.toThrow(ValidationError)
+  })
+
+  it('should reject negative amount', async () => {
+    await expect(async () => {
+      await sip.intent()
+        .input('solana', 'SOL', -1000n)
+        .build()
+    }).rejects.toThrow(ValidationError)
+  })
+
+  it('should reject missing recipient for shielded mode', async () => {
+    // Should fail without recipient
+    await expect(async () => {
+      await sip.intent()
+        .input('solana', 'SOL', 1_000_000_000n)
+        .output('zcash', 'ZEC', 50_000_000n)
+        .privacy(PrivacyLevel.SHIELDED)
+        // Missing .recipient()
+        .build()
+    }).rejects.toThrow()
+  })
+
+  it('should reject invalid slippage', () => {
+    expect(() => {
+      sip.intent()
+        .input('solana', 'SOL', 1_000_000_000n)
+        .output('zcash', 'ZEC', 50_000_000n)
+        .slippage(150)  // 150% is invalid
+    }).toThrow(ValidationError)
+  })
+
+  it('should reject invalid TTL', () => {
+    expect(() => {
+      sip.intent()
+        .input('solana', 'SOL', 1_000_000_000n)
+        .output('zcash', 'ZEC', 50_000_000n)
+        .ttl(-100)  // Negative TTL
+    }).toThrow(ValidationError)
+  })
+})
+```
+
+## Complete Example
+
+Full test suite for a SIP integration:
+
+```typescript
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import {
+  SIP,
+  PrivacyLevel,
+  MockProofProvider,
+  generateViewingKey,
+  encryptForViewing,
+  decryptWithViewing,
+  ValidationError,
+  type TransactionData,
+} from '@sip-protocol/sdk'
+
+describe('SIP Integration Test Suite', () => {
+  let sip: SIP
+  let mockWallet: MockWalletAdapter
+  let mockProvider: MockProofProvider
+
+  beforeEach(async () => {
+    // Setup
+    sip = new SIP({ network: 'testnet', mode: 'demo' })
+    mockProvider = new MockProofProvider()
+    sip.setProofProvider(mockProvider)
+
+    mockWallet = new MockWalletAdapter('solana')
+    await mockWallet.connect()
+    sip.connect(mockWallet)
+  })
+
+  describe('Basic Swap Flow', () => {
+    it('should create and execute swap', async () => {
+      // Create intent
+      sip.generateStealthKeys('zcash')
+      const recipient = sip.getStealthAddress()!
+
+      const intent = await sip.intent()
+        .input('solana', 'SOL', 1_000_000_000n)
+        .output('zcash', 'ZEC', 50_000_000n)
+        .privacy(PrivacyLevel.SHIELDED)
+        .recipient(recipient)
+        .build()
+
+      // Get quotes
+      const quotes = await sip.getQuotes(intent)
+      expect(quotes.length).toBeGreaterThan(0)
+
+      // Execute
+      const tracked = { ...intent, status: 'pending' as const, quotes: [] }
+      const result = await sip.execute(tracked, quotes[0])
+
+      expect(result.status).toBe('fulfilled')
+    })
+  })
+
+  describe('Privacy Features', () => {
+    it('should handle viewing keys', () => {
+      const key = sip.generateViewingKey('/m/0')
+      const childKey = sip.deriveViewingKey(key, 'child')
+
+      expect(childKey.key).not.toBe(key.key)
+      expect(childKey.path).toBe('/m/0/child')
+    })
+
+    it('should encrypt/decrypt transaction data', () => {
+      const key = generateViewingKey()
+      const data: TransactionData = {
+        sender: '0xSender',
+        recipient: '0xRecipient',
+        amount: '1000',
+        timestamp: Date.now(),
+      }
+
+      const encrypted = encryptForViewing(data, key)
+      const decrypted = decryptWithViewing(encrypted, key)
+
+      expect(decrypted.sender).toBe(data.sender)
+    })
+  })
+
+  describe('Error Handling', () => {
+    it('should reject invalid inputs', async () => {
+      await expect(async () => {
+        await sip.intent()
+          .input('invalid', 'TOKEN', 1000n)
+          .build()
+      }).rejects.toThrow(ValidationError)
+    })
+
+    it('should handle wallet disconnection', () => {
+      mockWallet.simulateDisconnect()
+      expect(mockWallet.isConnected()).toBe(false)
+    })
+  })
+
+  describe('Concurrent Operations', () => {
+    it('should handle parallel intents', async () => {
+      const intents = await Promise.all([
+        createTestIntent(sip, 'zcash'),
+        createTestIntent(sip, 'ethereum'),
+        createTestIntent(sip, 'near'),
+      ])
+
+      expect(intents).toHaveLength(3)
+
+      // All unique IDs
+      const ids = intents.map(i => i.intentId)
+      expect(new Set(ids).size).toBe(3)
+    })
+  })
+})
+
+// Helper function
+async function createTestIntent(sip: SIP, outputChain: string) {
+  sip.generateStealthKeys(outputChain as any)
+  const recipient = sip.getStealthAddress()!
+
+  return sip.intent()
+    .input('solana', 'SOL', 1_000_000_000n)
+    .output(outputChain, 'TOKEN', 50_000_000n)
+    .privacy(PrivacyLevel.SHIELDED)
+    .recipient(recipient)
+    .build()
+}
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Testing in Production Mode
+
+```typescript
+// ❌ Wrong - makes real network calls
+const sip = new SIP({ network: 'mainnet', mode: 'production' })
+```
+
+```typescript
+// ✅ Correct - use demo mode for tests
+const sip = new SIP({ network: 'testnet', mode: 'demo' })
+```
+
+### Pitfall 2: Not Cleaning Up Between Tests
+
+```typescript
+// ❌ Wrong - state leaks between tests
+let sip: SIP
+
+beforeAll(() => {
+  sip = new SIP({ network: 'testnet', mode: 'demo' })
+})
+// State persists between tests
+```
+
+```typescript
+// ✅ Correct - fresh instance per test
+beforeEach(() => {
+  sip = new SIP({ network: 'testnet', mode: 'demo' })
+})
+```
+
+### Pitfall 3: Not Testing Error Cases
+
+```typescript
+// ❌ Wrong - only test happy path
+it('should create intent', async () => {
+  const intent = await sip.intent().input(...).build()
+  expect(intent).toBeDefined()
+})
+```
+
+```typescript
+// ✅ Correct - test errors too
+it('should reject invalid input', async () => {
+  await expect(() =>
+    sip.intent().input('invalid', ...).build()
+  ).rejects.toThrow(ValidationError)
+})
+```
+
+### Pitfall 4: Not Mocking External Dependencies
+
+```typescript
+// ❌ Wrong - real wallet required
+const wallet = new PhantomWalletAdapter()
+await wallet.connect()  // Requires browser extension
+```
+
+```typescript
+// ✅ Correct - use mock wallet
+const wallet = new MockWalletAdapter()
+await wallet.connect()  // Works in any environment
+```
+
+### Pitfall 5: Flaky Tests Due to Timing
+
+```typescript
+// ❌ Wrong - assumes instant execution
+const result = await sip.execute(...)
+expect(result.status).toBe('fulfilled')  // Might be 'pending'
+```
+
+```typescript
+// ✅ Correct - handle async properly
+const result = await sip.execute(...)
+// In demo mode, execution is synchronous and immediate
+expect(result.status).toBe('fulfilled')
+```
+
+## Best Practices
+
+1. **Demo Mode:** Always use demo mode for tests
+2. **Fresh State:** Create new instances in beforeEach
+3. **Mock Everything:** Use mock wallets and providers
+4. **Test Errors:** Cover error scenarios thoroughly
+5. **Parallel Tests:** Ensure tests can run concurrently
+6. **Deterministic:** Avoid random/time-dependent behavior
+7. **Fast:** Keep tests fast with mocks
+
+## Next Steps
+
+- Learn about [E2E testing strategies](/guides/testing)
+- Review [SDK test suite](https://github.com/sip-protocol/sip-protocol/tree/main/packages/sdk/tests) for examples
+- Explore [CI/CD integration](/guides/ci-cd) for automated testing

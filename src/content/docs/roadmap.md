@@ -9,15 +9,16 @@ SIP Protocol is building the **privacy standard for Web3** — like HTTPS for th
 
 ## Current Status
 
-- **Phase**: 1 of 3 (Foundation)
-- **Progress**: 95% complete
-- **Milestone**: M8 - Production Hardening
-- **Tests**: 1,419 passing (1,293 SDK + 126 Website)
+- **Phase**: 3 of 4 Complete (Foundation → Standard → Ecosystem)
+- **Progress**: M15 Complete
+- **Tests**: 2,757 passing (SDK: 2,474, React: 57, CLI: 33, API: 67, Website: 126)
+- **Packages**: 6 (@sip-protocol/sdk, types, react, cli, api + website)
+- **Chains**: 15+ supported
 - **Live**: [sip-protocol.org](https://sip-protocol.org)
 
 ## Phases Overview
 
-### Phase 1: Foundation (M1-M8) — 95% Complete
+### Phase 1: Foundation (M1-M8) ✅ Complete
 
 Building the foundational cryptographic primitives and production-ready SDK.
 
@@ -30,42 +31,49 @@ Building the foundational cryptographic primitives and production-ready SDK.
 | M5 | Documentation & Launch | ✅ |
 | M6 | npm Publish | ✅ |
 | M7 | Demo Integration | ✅ |
-| M8 | Production Hardening | 🔄 |
+| M8 | Production Hardening | ✅ |
 
-### Phase 2: Standard (M9-M12) — Planned
+### Phase 2: Standard (M9-M12) ✅ Complete
 
-Multi-backend support, foundation grants, and ecosystem integration.
+Multi-backend support, multi-chain expansion.
 
-| Milestone | Focus |
-|-----------|-------|
-| M9 | Horizontal Expansion |
-| M10 | Multi-Foundation Grants |
-| M11 | Settlement Abstraction |
-| M12 | Partnership & Distribution |
+| Milestone | Focus | Status |
+|-----------|-------|--------|
+| M9 | Stable Core | ✅ |
+| M10 | ZK Production (Noir/WASM) | ✅ |
+| M11 | Multi-Settlement (3 backends) | ✅ |
+| M12 | Multi-Chain (15+ chains) | ✅ |
 
-### Phase 3: Ecosystem (M13-M15) — Future
+### Phase 3: Ecosystem (M13-M15) ✅ Complete
+
+Developer experience and application layer.
+
+| Milestone | Focus | Status |
+|-----------|-------|--------|
+| M13 | Compliance Layer | ✅ |
+| M14 | Developer Experience (React, CLI, API) | ✅ |
+| M15 | Application Layer (Hardware Wallets) | ✅ |
+
+### Phase 4: Future (M16-M18) 🔲 Planned
 
 Proof composition, technical moat, and protocol standardization.
 
-| Milestone | Focus |
-|-----------|-------|
-| M13 | Proof Aggregation |
-| M14 | Enterprise Features |
-| M15 | Protocol Standard |
+| Milestone | Focus | Status |
+|-----------|-------|--------|
+| M16 | Proof Composition Research | 🔲 |
+| M17 | Technical Moat | 🔲 |
+| M18 | Standard Proposal (SIP-EIP) | 🔲 |
 
 ## Supported Chains
 
-**Active:**
-- NEAR (native via NEAR Intents)
-- Ethereum (EVM + stealth addresses)
-- Solana (SVM + ed25519)
-- Zcash (shielded pool)
-
-**Coming Soon:**
-- Arbitrum, Base, Polygon (EVM L2s)
-- Aptos, Sui (MoveVM)
-- Bitcoin (via chain signatures)
-- Mina (proof verification)
+**Active (15+ chains):**
+- **EVM**: Ethereum, Arbitrum, Base, Polygon, Optimism
+- **Solana**: Native + SPL tokens
+- **NEAR**: Native via NEAR Intents
+- **Bitcoin**: Silent Payments (BIP-352)
+- **Cosmos**: IBC stealth addresses
+- **Move**: Aptos, Sui
+- **Zcash**: Shielded pool
 
 ## Full Roadmap
 
@@ -75,8 +83,8 @@ For detailed milestone tracking with GitHub issues, see the [full roadmap on the
 
 We welcome contributions! Current focus areas:
 
-- **M8**: Security audit preparation
-- **M9**: Horizontal expansion (payments, treasury)
-- **M10**: Multi-foundation grant applications
+- **Security**: External audit preparation
+- **M16**: Proof composition research
+- **Adoption**: Community feedback and integration support
 
 See [CONTRIBUTING.md](https://github.com/sip-protocol/sip-protocol/blob/main/CONTRIBUTING.md) for guidelines.

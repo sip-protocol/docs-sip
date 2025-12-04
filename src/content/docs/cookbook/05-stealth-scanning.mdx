@@ -1,0 +1,509 @@
+---
+title: "Stealth Address Scanning"
+description: "Learn how to scan for incoming stealth payments and claim funds using your private keys"
+---
+
+## Overview
+
+When someone sends you funds to a stealth address, you need to scan ephemeral public keys to find payments intended for you. This recipe shows how to efficiently scan for stealth payments and derive the private keys to claim them.
+
+## Prerequisites
+
+- Understanding of [stealth addresses](/concepts/stealth-address)
+- `@sip-protocol/sdk` installed
+- Your stealth meta-address private keys
+
+## Step-by-Step
+
+### Step 1: Generate Your Stealth Keys
+
+First, generate your stealth meta-address and securely store the private keys:
+
+```typescript
+import { generateStealthMetaAddress, encodeStealthMetaAddress } from '@sip-protocol/sdk'
+
+// Generate stealth keys for receiving
+const myKeys = generateStealthMetaAddress('ethereum', 'my-wallet')
+
+console.log('Your stealth meta-address:', encodeStealthMetaAddress(myKeys.metaAddress))
+// Output: sip:ethereum:0x02abc...123:0x03def...456
+
+console.log('Private keys (KEEP SECRET!):', {
+  spending: myKeys.spendingPrivateKey.slice(0, 20) + '...',
+  viewing: myKeys.viewingPrivateKey.slice(0, 20) + '...',
+})
+
+// Store private keys securely!
+// await secureStorage.store('stealth-keys', myKeys)
+```
+
+### Step 2: Scan for Incoming Payments
+
+Check if stealth addresses are intended for you using view tags for efficiency:
+
+```typescript
+import { checkStealthAddress, type StealthAddress } from '@sip-protocol/sdk'
+
+// Example stealth addresses from blockchain events
+const incomingStealthAddresses: StealthAddress[] = [
+  {
+    address: '0x02abc...',
+    ephemeralPublicKey: '0x03def...',
+    viewTag: 42,
+  },
+  {
+    address: '0x02xyz...',
+    ephemeralPublicKey: '0x03uvw...',
+    viewTag: 127,
+  },
+  // ... more addresses
+]
+
+// Scan for your payments
+const myPayments: StealthAddress[] = []
+
+for (const stealthAddr of incomingStealthAddresses) {
+  // Check if this payment is for you
+  const isMine = checkStealthAddress(
+    stealthAddr,
+    myKeys.spendingPrivateKey,
+    myKeys.viewingPrivateKey
+  )
+
+  if (isMine) {
+    console.log('Found payment for me:', stealthAddr.address.slice(0, 20) + '...')
+    myPayments.push(stealthAddr)
+  }
+}
+
+console.log(`Found ${myPayments.length} payments`)
+```
+
+### Step 3: Derive Private Keys to Claim Funds
+
+For each payment you found, derive the private key to spend it:
+
+```typescript
+import { deriveStealthPrivateKey } from '@sip-protocol/sdk'
+
+const claimablePayments = []
+
+for (const payment of myPayments) {
+  // Derive the private key for this stealth address
+  const recovery = deriveStealthPrivateKey(
+    payment,
+    myKeys.spendingPrivateKey,
+    myKeys.viewingPrivateKey
+  )
+
+  console.log('Can claim payment:', {
+    stealthAddress: recovery.stealthAddress.slice(0, 20) + '...',
+    privateKey: recovery.privateKey.slice(0, 20) + '...',
+  })
+
+  claimablePayments.push({
+    address: recovery.stealthAddress,
+    privateKey: recovery.privateKey,
+    ephemeralPublicKey: recovery.ephemeralPublicKey,
+  })
+}
+
+// Now you can use these private keys to sign transactions and claim funds
+```
+
+### Step 4: Optimize Scanning with View Tags
+
+Use view tags to quickly filter out payments that aren't for you:
+
+```typescript
+interface OptimizedStealthScanner {
+  ownKeys: {
+    spendingPrivateKey: string
+    viewingPrivateKey: string
+  }
+  scanned: number
+  found: number
+}
+
+function createScanner(spendingPriv: string, viewingPriv: string): OptimizedStealthScanner {
+  return {
+    ownKeys: {
+      spendingPrivateKey: spendingPriv,
+      viewingPrivateKey: viewingPriv,
+    },
+    scanned: 0,
+    found: 0,
+  }
+}
+
+async function efficientScan(
+  scanner: OptimizedStealthScanner,
+  stealthAddresses: StealthAddress[]
+): Promise<StealthAddress[]> {
+  const myPayments: StealthAddress[] = []
+
+  for (const addr of stealthAddresses) {
+    scanner.scanned++
+
+    // Quick check: view tag filtering (cheap operation)
+    // If view tags don't match, skip expensive full check
+    // Note: checkStealthAddress already does this internally,
+    // but you could pre-filter if you had the expected view tags
+
+    const isMine = checkStealthAddress(
+      addr,
+      scanner.ownKeys.spendingPrivateKey,
+      scanner.ownKeys.viewingPrivateKey
+    )
+
+    if (isMine) {
+      scanner.found++
+      myPayments.push(addr)
+    }
+
+    // Log progress every 100 addresses
+    if (scanner.scanned % 100 === 0) {
+      console.log(`Scanned ${scanner.scanned} addresses, found ${scanner.found}`)
+    }
+  }
+
+  return myPayments
+}
+
+// Usage
+const scanner = createScanner(myKeys.spendingPrivateKey, myKeys.viewingPrivateKey)
+const payments = await efficientScan(scanner, incomingStealthAddresses)
+console.log(`Scan complete: ${scanner.found}/${scanner.scanned} payments found`)
+```
+
+### Step 5: Monitor Blockchain for New Payments
+
+Set up a listener to continuously scan for new stealth payments:
+
+```typescript
+interface PaymentMonitor {
+  scanner: OptimizedStealthScanner
+  lastScannedBlock: number
+  onPaymentFound: (payment: StealthAddress) => void
+}
+
+async function monitorForPayments(monitor: PaymentMonitor) {
+  // In production, connect to blockchain RPC and listen for events
+  // This is a simplified example
+
+  console.log('Starting payment monitor from block', monitor.lastScannedBlock)
+
+  // Simulate monitoring (in production, use actual blockchain events)
+  const checkForNewPayments = async () => {
+    // Get new stealth address announcements from blockchain
+    // const newAddresses = await getStealthAnnouncementsFromBlock(monitor.lastScannedBlock)
+
+    // For demo, use mock data
+    const newAddresses: StealthAddress[] = []
+
+    // Scan new addresses
+    for (const addr of newAddresses) {
+      const isMine = checkStealthAddress(
+        addr,
+        monitor.scanner.ownKeys.spendingPrivateKey,
+        monitor.scanner.ownKeys.viewingPrivateKey
+      )
+
+      if (isMine) {
+        console.log('💰 New payment received!')
+        monitor.onPaymentFound(addr)
+      }
+    }
+
+    monitor.lastScannedBlock++
+  }
+
+  // Poll every 10 seconds (in production, use websocket subscriptions)
+  setInterval(checkForNewPayments, 10000)
+}
+
+// Usage
+const paymentMonitor: PaymentMonitor = {
+  scanner: createScanner(myKeys.spendingPrivateKey, myKeys.viewingPrivateKey),
+  lastScannedBlock: 1000000,
+  onPaymentFound: (payment) => {
+    console.log('Payment found:', payment.address)
+    // Derive key and add to wallet
+  },
+}
+
+// Start monitoring
+// monitorForPayments(paymentMonitor)
+```
+
+## Complete Example
+
+Full stealth address scanning and claiming workflow:
+
+```typescript
+import {
+  generateStealthMetaAddress,
+  checkStealthAddress,
+  deriveStealthPrivateKey,
+  encodeStealthMetaAddress,
+  type StealthAddress,
+} from '@sip-protocol/sdk'
+
+class StealthWallet {
+  private spendingPrivateKey: string
+  private viewingPrivateKey: string
+  private metaAddress: any
+  private payments: Array<{
+    address: string
+    privateKey: string
+    claimed: boolean
+  }> = []
+
+  constructor(chain: string, label: string) {
+    const keys = generateStealthMetaAddress(chain, label)
+    this.spendingPrivateKey = keys.spendingPrivateKey
+    this.viewingPrivateKey = keys.viewingPrivateKey
+    this.metaAddress = keys.metaAddress
+
+    console.log('Stealth wallet created:', encodeStealthMetaAddress(this.metaAddress))
+  }
+
+  // Scan for payments
+  async scanForPayments(stealthAddresses: StealthAddress[]): Promise<number> {
+    let newPayments = 0
+
+    for (const addr of stealthAddresses) {
+      // Check if this payment is for us
+      const isMine = checkStealthAddress(
+        addr,
+        this.spendingPrivateKey,
+        this.viewingPrivateKey
+      )
+
+      if (!isMine) continue
+
+      // Derive private key to claim it
+      const recovery = deriveStealthPrivateKey(
+        addr,
+        this.spendingPrivateKey,
+        this.viewingPrivateKey
+      )
+
+      // Check if we already have this payment
+      const exists = this.payments.some(p => p.address === recovery.stealthAddress)
+      if (exists) continue
+
+      // Add new payment
+      this.payments.push({
+        address: recovery.stealthAddress,
+        privateKey: recovery.privateKey,
+        claimed: false,
+      })
+
+      newPayments++
+      console.log('💰 New payment:', recovery.stealthAddress.slice(0, 20) + '...')
+    }
+
+    return newPayments
+  }
+
+  // Get unclaimed payments
+  getUnclaimedPayments() {
+    return this.payments.filter(p => !p.claimed)
+  }
+
+  // Claim a payment
+  async claimPayment(address: string) {
+    const payment = this.payments.find(p => p.address === address)
+    if (!payment) {
+      throw new Error('Payment not found')
+    }
+
+    if (payment.claimed) {
+      throw new Error('Payment already claimed')
+    }
+
+    // In production, use payment.privateKey to sign transaction
+    // const tx = await wallet.sendTransaction({ privateKey: payment.privateKey, ... })
+
+    payment.claimed = true
+    console.log('✓ Payment claimed:', address.slice(0, 20) + '...')
+  }
+
+  // Get balance (unclaimed payments)
+  getBalance(): number {
+    return this.getUnclaimedPayments().length
+  }
+
+  // Get receiving address
+  getReceivingAddress(): string {
+    return encodeStealthMetaAddress(this.metaAddress)
+  }
+}
+
+// Example usage
+async function demonstrateStealth Scanner() {
+  // Create wallet
+  const wallet = new StealthWallet('ethereum', 'my-wallet')
+  console.log('Receiving address:', wallet.getReceivingAddress())
+
+  // Mock stealth addresses (in production, get from blockchain)
+  const mockStealthAddresses: StealthAddress[] = [
+    // These would come from blockchain events
+  ]
+
+  // Scan for payments
+  console.log('\nScanning for payments...')
+  const found = await wallet.scanForPayments(mockStealthAddresses)
+  console.log(`Found ${found} new payments`)
+
+  // Check balance
+  console.log(`\nUnclaimed payments: ${wallet.getBalance()}`)
+
+  // Claim payments
+  const unclaimed = wallet.getUnclaimedPayments()
+  for (const payment of unclaimed) {
+    await wallet.claimPayment(payment.address)
+  }
+
+  console.log(`\nFinal balance: ${wallet.getBalance()}`)
+}
+
+demonstrateStealth Scanner()
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Not Storing Private Keys Securely
+
+**Problem:** Losing spending or viewing private keys.
+
+```typescript
+// ❌ Wrong - keys lost if app restarts
+const keys = generateStealthMetaAddress('ethereum')
+// ... app restarts, keys lost forever
+```
+
+**Solution:** Persistently store keys in secure storage.
+
+```typescript
+// ✅ Correct - persist keys securely
+const keys = generateStealthMetaAddress('ethereum')
+await secureVault.store('stealth-keys', {
+  spending: keys.spendingPrivateKey,
+  viewing: keys.viewingPrivateKey,
+})
+```
+
+### Pitfall 2: Scanning Without View Tag Optimization
+
+**Problem:** Not leveraging view tags for efficiency.
+
+```typescript
+// ❌ Wrong - expensive full check for every address
+for (const addr of allAddresses) {
+  const isMine = checkStealthAddress(addr, spending, viewing)
+  // Full computation every time
+}
+```
+
+**Solution:** checkStealthAddress already uses view tags internally for optimization. Just use it correctly.
+
+```typescript
+// ✅ Correct - view tag optimization built-in
+for (const addr of allAddresses) {
+  const isMine = checkStealthAddress(addr, spending, viewing)
+  // View tag checked first (fast rejection)
+}
+```
+
+### Pitfall 3: Re-Scanning Already Claimed Payments
+
+**Problem:** Scanning the same addresses repeatedly.
+
+```typescript
+// ❌ Wrong - scanning from genesis every time
+async function scan() {
+  const addresses = await getStealthAddresses FromBlock(0)
+  // Scans everything every time
+}
+```
+
+**Solution:** Track last scanned block and only scan new ones.
+
+```typescript
+// ✅ Correct - incremental scanning
+let lastScanned = await storage.get('lastScannedBlock') || 0
+
+async function scan() {
+  const currentBlock = await getLatestBlock()
+  const addresses = await getStealthAddressesFromBlock(lastScanned, currentBlock)
+
+  // Scan only new addresses
+  await scanForPayments(addresses)
+
+  lastScanned = currentBlock
+  await storage.set('lastScannedBlock', lastScanned)
+}
+```
+
+### Pitfall 4: Not Handling Chain Reorganizations
+
+**Problem:** Missing payments due to chain reorgs.
+
+```typescript
+// ❌ Wrong - assumes blocks are final
+lastScanned = currentBlock
+// If reorg happens, might miss payments
+```
+
+**Solution:** Keep a buffer and rescan recent blocks.
+
+```typescript
+// ✅ Correct - buffer for reorgs
+const REORG_BUFFER = 12  // blocks
+
+async function scan() {
+  const current = await getLatestBlock()
+  const scanFrom = Math.max(0, lastScanned - REORG_BUFFER)
+  const addresses = await getStealthAddressesFromBlock(scanFrom, current)
+
+  await scanForPayments(addresses)
+  lastScanned = current
+}
+```
+
+### Pitfall 5: Exposing Private Keys in Logs
+
+**Problem:** Logging derived private keys.
+
+```typescript
+// ❌ Wrong - exposes private keys
+const recovery = deriveStealthPrivateKey(addr, spending, viewing)
+console.log('Recovered key:', recovery.privateKey)  // DON'T LOG THIS!
+```
+
+**Solution:** Never log private keys.
+
+```typescript
+// ✅ Correct - log only public info
+const recovery = deriveStealthPrivateKey(addr, spending, viewing)
+console.log('Recovered address:', recovery.stealthAddress)
+// Private key used internally only
+```
+
+## Performance Optimization
+
+For scanning large numbers of addresses:
+
+1. **Batch Processing:** Scan in batches to avoid blocking
+2. **Worker Threads:** Use web workers for parallel scanning
+3. **Indexed Events:** Index stealth announcements off-chain
+4. **View Tag Index:** Pre-filter by view tag before full check
+5. **Incremental Sync:** Only scan new blocks
+
+## Next Steps
+
+- [Implement compliance reporting](/cookbook/06-compliance-reporting) for scanned payments
+- [Handle batch transactions](/cookbook/07-batch-transactions) efficiently
+- [Integrate with wallets](/cookbook/09-wallet-integration) for automatic scanning

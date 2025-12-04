@@ -1,0 +1,258 @@
+---
+title: "Basic Swap with Privacy"
+description: "Learn how to perform a simple cross-chain swap with default privacy settings using the SIP SDK"
+---
+
+## Overview
+
+This recipe demonstrates the most common use case: creating a basic cross-chain swap with shielded privacy. We'll swap SOL to ZEC with full sender/amount privacy.
+
+## Prerequisites
+
+- Node.js 18+ installed
+- `@sip-protocol/sdk` package installed
+- Basic understanding of async/await in JavaScript
+
+```bash
+npm install @sip-protocol/sdk
+```
+
+## Step-by-Step
+
+### Step 1: Initialize the SDK
+
+Start by creating a SIP instance in demo mode for testing:
+
+```typescript
+import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
+
+// Create SIP instance (testnet, demo mode)
+const sip = new SIP({
+  network: 'testnet',
+  mode: 'demo',
+})
+```
+
+### Step 2: Generate Stealth Keys
+
+Generate stealth keys for receiving private payments:
+
+```typescript
+// Generate stealth keys for the recipient chain
+const stealthMetaAddress = sip.generateStealthKeys('zcash', 'my-wallet')
+const recipientAddress = sip.getStealthAddress()
+
+console.log('Recipient stealth address:', recipientAddress)
+// Output: sip:zcash:0x02abc...123:0x03def...456
+```
+
+### Step 3: Create a Shielded Intent
+
+Build the intent using the builder pattern:
+
+```typescript
+// Create a shielded swap intent
+const intent = await sip.intent()
+  .input('solana', 'SOL', 1_000_000_000n)  // 1 SOL (in lamports)
+  .output('zcash', 'ZEC', 50_000_000n)     // Min 0.5 ZEC (in zatoshis)
+  .privacy(PrivacyLevel.SHIELDED)
+  .recipient(recipientAddress!)
+  .slippage(1)  // 1% slippage tolerance
+  .ttl(300)     // 5 minutes expiry
+  .build()
+
+console.log('Intent created:', intent.intentId)
+console.log('Privacy level:', intent.privacyLevel)
+```
+
+### Step 4: Get Quotes
+
+Fetch quotes from solvers:
+
+```typescript
+// Get quotes from available solvers
+const quotes = await sip.getQuotes(intent)
+
+console.log(`Received ${quotes.length} quotes`)
+
+// Sort by best output amount
+const bestQuote = quotes.sort((a, b) =>
+  Number(b.outputAmount - a.outputAmount)
+)[0]
+
+console.log('Best quote:', {
+  solverId: bestQuote.solverId,
+  outputAmount: bestQuote.outputAmount,
+  estimatedTime: bestQuote.estimatedTime,
+  fee: bestQuote.fee,
+})
+```
+
+### Step 5: Execute the Swap
+
+Execute the intent with the selected quote:
+
+```typescript
+// Track intent and execute
+const tracked = {
+  ...intent,
+  status: 'pending',
+  quotes: [],
+}
+
+const result = await sip.execute(tracked, bestQuote)
+
+console.log('Swap completed!', {
+  status: result.status,
+  outputAmount: result.outputAmount,
+  txHash: result.txHash,  // undefined for shielded mode
+})
+```
+
+## Complete Example
+
+Here's the full working code:
+
+```typescript
+import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
+
+async function basicSwap() {
+  // 1. Initialize SDK
+  const sip = new SIP({
+    network: 'testnet',
+    mode: 'demo',
+  })
+
+  // 2. Generate stealth keys
+  sip.generateStealthKeys('zcash', 'my-wallet')
+  const recipientAddress = sip.getStealthAddress()!
+
+  // 3. Create shielded intent
+  const intent = await sip.intent()
+    .input('solana', 'SOL', 1_000_000_000n)
+    .output('zcash', 'ZEC', 50_000_000n)
+    .privacy(PrivacyLevel.SHIELDED)
+    .recipient(recipientAddress)
+    .slippage(1)
+    .ttl(300)
+    .build()
+
+  console.log('Intent created:', intent.intentId)
+
+  // 4. Get quotes
+  const quotes = await sip.getQuotes(intent)
+  const bestQuote = quotes.sort((a, b) =>
+    Number(b.outputAmount - a.outputAmount)
+  )[0]
+
+  console.log('Best quote output:', bestQuote.outputAmount)
+
+  // 5. Execute swap
+  const tracked = {
+    ...intent,
+    status: 'pending' as const,
+    quotes: [],
+  }
+
+  const result = await sip.execute(tracked, bestQuote)
+  console.log('Swap status:', result.status)
+
+  return result
+}
+
+// Run the swap
+basicSwap()
+  .then(result => console.log('Success!', result))
+  .catch(err => console.error('Error:', err))
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Forgetting to Generate Stealth Keys
+
+**Problem:** Calling `.recipient()` without generating keys first.
+
+```typescript
+// ❌ Wrong - no stealth keys generated
+const intent = await sip.intent()
+  .input('solana', 'SOL', 1_000_000_000n)
+  .output('zcash', 'ZEC', 50_000_000n)
+  .privacy(PrivacyLevel.SHIELDED)
+  .build()  // Error: No recipient for shielded mode
+```
+
+**Solution:** Always generate keys before using shielded mode.
+
+```typescript
+// ✅ Correct
+sip.generateStealthKeys('zcash')
+const recipientAddress = sip.getStealthAddress()!
+
+const intent = await sip.intent()
+  .input('solana', 'SOL', 1_000_000_000n)
+  .output('zcash', 'ZEC', 50_000_000n)
+  .privacy(PrivacyLevel.SHIELDED)
+  .recipient(recipientAddress)
+  .build()
+```
+
+### Pitfall 2: Using Wrong Units for Amounts
+
+**Problem:** Passing decimal numbers instead of smallest unit bigints.
+
+```typescript
+// ❌ Wrong - using decimal SOL
+.input('solana', 'SOL', 1.5)  // Will floor to 1 lamport!
+```
+
+**Solution:** Always use the smallest unit (lamports, zatoshis, wei, etc.) as bigint.
+
+```typescript
+// ✅ Correct - 1.5 SOL = 1,500,000,000 lamports
+.input('solana', 'SOL', 1_500_000_000n)
+```
+
+### Pitfall 3: Not Handling Quote Expiry
+
+**Problem:** Executing with an expired quote.
+
+```typescript
+// ❌ Wrong - quote might expire while processing
+const quotes = await sip.getQuotes(intent)
+await someSlowOperation()  // Takes too long
+await sip.execute(tracked, quotes[0])  // Quote expired!
+```
+
+**Solution:** Check expiry before execution or refresh quotes.
+
+```typescript
+// ✅ Correct - check expiry
+const now = Math.floor(Date.now() / 1000)
+if (bestQuote.expiry < now) {
+  // Refresh quotes
+  const newQuotes = await sip.getQuotes(intent)
+  bestQuote = newQuotes[0]
+}
+```
+
+### Pitfall 4: Ignoring Minimum Output Amount
+
+**Problem:** Setting minOutputAmount higher than expected market rate.
+
+```typescript
+// ❌ Wrong - unrealistic minimum (1 SOL for 10 ZEC)
+.output('zcash', 'ZEC', 1_000_000_000n)  // Too high, no quotes
+```
+
+**Solution:** Set realistic minimums or use 0 to accept any amount.
+
+```typescript
+// ✅ Correct - realistic minimum based on market rates
+.output('zcash', 'ZEC', 50_000_000n)  // ~0.5 ZEC for 1 SOL
+```
+
+## Next Steps
+
+- [Learn about privacy levels](/cookbook/02-privacy-levels) to customize privacy
+- [Manage viewing keys](/cookbook/03-viewing-keys) for compliant mode
+- [Integrate with wallets](/cookbook/09-wallet-integration) for production

@@ -1,0 +1,586 @@
+---
+title: "Compliance Reporting"
+description: "Learn how to build compliance reporting workflows for auditors and regulators using viewing keys"
+---
+
+## Overview
+
+This recipe shows how to build comprehensive compliance reporting systems that allow authorized parties to audit transaction history while maintaining privacy for the public.
+
+## Prerequisites
+
+- Completed [Viewing Key Management](/cookbook/03-viewing-keys)
+- Completed [Multi-Party Disclosure](/cookbook/04-multi-party-disclosure)
+- Understanding of compliance requirements
+
+## Step-by-Step
+
+### Step 1: Set Up Compliance Infrastructure
+
+Create the foundation for tracking compliant transactions:
+
+```typescript
+import {
+  SIP,
+  PrivacyLevel,
+  encryptForViewing,
+  createShieldedIntent,
+  type TransactionData,
+} from '@sip-protocol/sdk'
+
+// Initialize SDK and generate viewing keys
+const sip = new SIP({ network: 'testnet', mode: 'demo' })
+
+// Create hierarchical viewing keys for compliance
+const masterKey = sip.generateViewingKey('/m/44/501/0/compliance')
+const keys = {
+  annual: sip.deriveViewingKey(masterKey, '2024'),
+  quarterly: sip.deriveViewingKey(masterKey, '2024/q4'),
+  monthly: sip.deriveViewingKey(masterKey, '2024/q4/december'),
+  auditor: sip.deriveViewingKey(masterKey, 'external-audit/2024'),
+  tax: sip.deriveViewingKey(masterKey, 'tax/federal/2024'),
+}
+
+console.log('Compliance key hierarchy:', Object.keys(keys))
+```
+
+### Step 2: Create Compliant Transaction Records
+
+Create transactions with built-in audit capability:
+
+```typescript
+interface ComplianceRecord {
+  intentId: string
+  timestamp: number
+  category: 'operational' | 'payroll' | 'investment' | 'tax'
+  encryptedData: ReturnType<typeof encryptForViewing>
+  viewingKeyHash: string
+  metadata: {
+    description: string
+    reference?: string
+    tags: string[]
+  }
+}
+
+async function createCompliantTransaction(
+  inputChain: string,
+  outputChain: string,
+  amount: bigint,
+  category: string,
+  description: string
+): Promise<ComplianceRecord> {
+  // Select appropriate viewing key based on category
+  const viewingKey = category === 'tax' ? keys.tax : keys.monthly
+
+  // Generate stealth address
+  sip.generateStealthKeys(outputChain)
+  const recipientAddr = sip.getStealthAddress()!
+
+  // Create compliant intent
+  const intent = await createShieldedIntent({
+    input: {
+      asset: { chain: inputChain as any, symbol: 'TOKEN', address: null, decimals: 18 },
+      amount,
+    },
+    output: {
+      asset: { chain: outputChain as any, symbol: 'TOKEN', address: null, decimals: 18 },
+      minAmount: amount - (amount / 100n),  // 1% slippage
+      maxSlippage: 0.01,
+    },
+    privacy: PrivacyLevel.COMPLIANT,
+    viewingKey: viewingKey.key,
+    recipientMetaAddress: recipientAddr,
+    ttl: 300,
+  })
+
+  // Create transaction data for auditors
+  const txData: TransactionData = {
+    sender: '0xCompanyTreasury',
+    recipient: recipientAddr,
+    amount: amount.toString(),
+    timestamp: intent.createdAt,
+  }
+
+  // Encrypt for viewing
+  const encrypted = encryptForViewing(txData, viewingKey)
+
+  // Create compliance record
+  const record: ComplianceRecord = {
+    intentId: intent.intentId,
+    timestamp: intent.createdAt,
+    category: category as any,
+    encryptedData: encrypted,
+    viewingKeyHash: viewingKey.hash,
+    metadata: {
+      description,
+      tags: [category, outputChain, new Date(intent.createdAt * 1000).toISOString().slice(0, 7)],
+    },
+  }
+
+  console.log('Compliant transaction created:', record.intentId)
+  return record
+}
+
+// Example usage
+const taxPayment = await createCompliantTransaction(
+  'ethereum',
+  'near',
+  1_000_000_000_000_000_000n,  // 1 ETH
+  'tax',
+  'Q4 2024 Tax Payment'
+)
+```
+
+### Step 3: Build Compliance Query Interface
+
+Create an interface for auditors to query transactions:
+
+```typescript
+import { decryptWithViewing } from '@sip-protocol/sdk'
+
+class ComplianceDatabase {
+  private records: ComplianceRecord[] = []
+
+  // Add record
+  addRecord(record: ComplianceRecord) {
+    this.records.push(record)
+    console.log(`Added record: ${record.intentId}`)
+  }
+
+  // Query by category
+  queryByCategory(category: string): ComplianceRecord[] {
+    return this.records.filter(r => r.category === category)
+  }
+
+  // Query by date range
+  queryByDateRange(startTime: number, endTime: number): ComplianceRecord[] {
+    return this.records.filter(
+      r => r.timestamp >= startTime && r.timestamp <= endTime
+    )
+  }
+
+  // Query by tags
+  queryByTags(tags: string[]): ComplianceRecord[] {
+    return this.records.filter(r =>
+      tags.some(tag => r.metadata.tags.includes(tag))
+    )
+  }
+
+  // Decrypt records with viewing key
+  decryptRecords(records: ComplianceRecord[], viewingKey: any): TransactionData[] {
+    const decrypted: TransactionData[] = []
+
+    for (const record of records) {
+      // Check if this viewing key can decrypt this record
+      if (record.viewingKeyHash !== viewingKey.hash) {
+        console.log(`Skipping record ${record.intentId} - key mismatch`)
+        continue
+      }
+
+      try {
+        const data = decryptWithViewing(record.encryptedData, viewingKey)
+        decrypted.push(data)
+      } catch (error) {
+        console.error(`Failed to decrypt ${record.intentId}:`, error)
+      }
+    }
+
+    return decrypted
+  }
+
+  // Generate report
+  generateReport(
+    viewingKey: any,
+    filters?: {
+      category?: string
+      startTime?: number
+      endTime?: number
+      tags?: string[]
+    }
+  ) {
+    // Apply filters
+    let filtered = this.records
+
+    if (filters?.category) {
+      filtered = filtered.filter(r => r.category === filters.category)
+    }
+
+    if (filters?.startTime && filters?.endTime) {
+      filtered = filtered.filter(
+        r => r.timestamp >= filters.startTime! && r.timestamp <= filters.endTime!
+      )
+    }
+
+    if (filters?.tags) {
+      filtered = filtered.filter(r =>
+        filters.tags!.some(tag => r.metadata.tags.includes(tag))
+      )
+    }
+
+    // Decrypt accessible records
+    const decrypted = this.decryptRecords(filtered, viewingKey)
+
+    // Calculate totals
+    const totalAmount = decrypted.reduce(
+      (sum, tx) => sum + BigInt(tx.amount),
+      0n
+    )
+
+    return {
+      totalRecords: filtered.length,
+      accessibleRecords: decrypted.length,
+      totalAmount: totalAmount.toString(),
+      transactions: decrypted.map((tx, i) => ({
+        ...tx,
+        metadata: filtered[i].metadata,
+      })),
+    }
+  }
+}
+
+// Example usage
+const complianceDb = new ComplianceDatabase()
+
+// Add some records
+complianceDb.addRecord(taxPayment)
+
+// Query tax transactions
+const taxRecords = complianceDb.queryByCategory('tax')
+console.log(`Found ${taxRecords.length} tax records`)
+
+// Generate tax report
+const taxReport = complianceDb.generateReport(keys.tax, {
+  category: 'tax',
+  startTime: Math.floor(new Date('2024-01-01').getTime() / 1000),
+  endTime: Math.floor(new Date('2024-12-31').getTime() / 1000),
+})
+
+console.log('Tax Report:', taxReport)
+```
+
+### Step 4: Generate Compliance Reports
+
+Create formatted reports for different stakeholders:
+
+```typescript
+interface ComplianceReport {
+  reportId: string
+  generatedAt: number
+  generatedBy: string
+  period: { start: number; end: number }
+  summary: {
+    totalTransactions: number
+    totalVolume: string
+    byCategory: Record<string, { count: number; volume: string }>
+  }
+  transactions: Array<TransactionData & { category: string; description: string }>
+}
+
+async function generateQuarterlyReport(
+  db: ComplianceDatabase,
+  quarter: string,
+  year: number,
+  viewingKey: any
+): Promise<ComplianceReport> {
+  // Calculate quarter dates
+  const quarters = {
+    q1: { start: new Date(`${year}-01-01`), end: new Date(`${year}-03-31`) },
+    q2: { start: new Date(`${year}-04-01`), end: new Date(`${year}-06-30`) },
+    q3: { start: new Date(`${year}-07-01`), end: new Date(`${year}-09-30`) },
+    q4: { start: new Date(`${year}-10-01`), end: new Date(`${year}-12-31`) },
+  }
+
+  const period = quarters[quarter.toLowerCase() as keyof typeof quarters]
+  const startTime = Math.floor(period.start.getTime() / 1000)
+  const endTime = Math.floor(period.end.getTime() / 1000)
+
+  // Generate report data
+  const reportData = db.generateReport(viewingKey, { startTime, endTime })
+
+  // Calculate category breakdown
+  const byCategory: Record<string, { count: number; volume: string }> = {}
+
+  for (const tx of reportData.transactions) {
+    const cat = (tx as any).metadata.category
+    if (!byCategory[cat]) {
+      byCategory[cat] = { count: 0, volume: '0' }
+    }
+    byCategory[cat].count++
+    byCategory[cat].volume = (
+      BigInt(byCategory[cat].volume) + BigInt(tx.amount)
+    ).toString()
+  }
+
+  const report: ComplianceReport = {
+    reportId: `${quarter}-${year}-${Date.now()}`,
+    generatedAt: Math.floor(Date.now() / 1000),
+    generatedBy: 'Compliance System',
+    period: { start: startTime, end: endTime },
+    summary: {
+      totalTransactions: reportData.totalRecords,
+      totalVolume: reportData.totalAmount,
+      byCategory,
+    },
+    transactions: reportData.transactions as any,
+  }
+
+  return report
+}
+
+// Generate Q4 2024 report
+const q4Report = await generateQuarterlyReport(
+  complianceDb,
+  'q4',
+  2024,
+  keys.quarterly
+)
+
+console.log('Q4 2024 Report:', {
+  totalTransactions: q4Report.summary.totalTransactions,
+  totalVolume: q4Report.summary.totalVolume,
+  categories: Object.keys(q4Report.summary.byCategory),
+})
+```
+
+### Step 5: Export Reports for Auditors
+
+Create exportable formats for different regulatory requirements:
+
+```typescript
+interface ReportExporter {
+  toJSON(report: ComplianceReport): string
+  toCSV(report: ComplianceReport): string
+  toAuditFormat(report: ComplianceReport): string
+}
+
+const reportExporter: ReportExporter = {
+  // JSON export
+  toJSON(report) {
+    return JSON.stringify(report, null, 2)
+  },
+
+  // CSV export
+  toCSV(report) {
+    const headers = 'Timestamp,Sender,Recipient,Amount,Category,Description\n'
+    const rows = report.transactions
+      .map(tx => {
+        const date = new Date((tx as any).timestamp * 1000).toISOString()
+        return `${date},${tx.sender},${tx.recipient},${tx.amount},${(tx as any).category},${(tx as any).description}`
+      })
+      .join('\n')
+    return headers + rows
+  },
+
+  // Audit format (example)
+  toAuditFormat(report) {
+    let output = `COMPLIANCE AUDIT REPORT\n`
+    output += `Report ID: ${report.reportId}\n`
+    output += `Generated: ${new Date(report.generatedAt * 1000).toISOString()}\n`
+    output += `Period: ${new Date(report.period.start * 1000).toISOString()} to ${new Date(report.period.end * 1000).toISOString()}\n\n`
+    output += `SUMMARY\n`
+    output += `Total Transactions: ${report.summary.totalTransactions}\n`
+    output += `Total Volume: ${report.summary.totalVolume}\n\n`
+
+    output += `CATEGORY BREAKDOWN\n`
+    for (const [cat, data] of Object.entries(report.summary.byCategory)) {
+      output += `${cat}: ${data.count} transactions, ${data.volume} total\n`
+    }
+
+    output += `\n DETAILED TRANSACTIONS\n`
+    for (const tx of report.transactions) {
+      output += `\n---\n`
+      output += `Time: ${new Date((tx as any).timestamp * 1000).toISOString()}\n`
+      output += `From: ${tx.sender}\n`
+      output += `To: ${tx.recipient}\n`
+      output += `Amount: ${tx.amount}\n`
+      output += `Category: ${(tx as any).category}\n`
+      output += `Description: ${(tx as any).description}\n`
+    }
+
+    return output
+  },
+}
+
+// Export report
+const jsonReport = reportExporter.toJSON(q4Report)
+const csvReport = reportExporter.toCSV(q4Report)
+const auditReport = reportExporter.toAuditFormat(q4Report)
+
+console.log('Reports generated in 3 formats')
+
+// Save to files (example)
+// await fs.writeFile(`reports/q4-2024.json`, jsonReport)
+// await fs.writeFile(`reports/q4-2024.csv`, csvReport)
+// await fs.writeFile(`reports/q4-2024-audit.txt`, auditReport)
+```
+
+## Complete Example
+
+Full compliance reporting system:
+
+```typescript
+import {
+  SIP,
+  PrivacyLevel,
+  createShieldedIntent,
+  encryptForViewing,
+  decryptWithViewing,
+  type TransactionData,
+} from '@sip-protocol/sdk'
+
+async function demonstrateComplianceReporting() {
+  // 1. Setup
+  const sip = new SIP({ network: 'testnet', mode: 'demo' })
+  const masterKey = sip.generateViewingKey('/m/44/501/0/org')
+  const auditKey = sip.deriveViewingKey(masterKey, 'audit/2024')
+
+  const db = new ComplianceDatabase()
+
+  // 2. Create compliant transactions
+  console.log('\n=== Creating Transactions ===')
+
+  const transactions = [
+    { chain: 'ethereum', amount: 5_000_000_000n, category: 'operational', desc: 'Vendor payment' },
+    { chain: 'near', amount: 3_000_000_000n, category: 'payroll', desc: 'Employee salary' },
+    { chain: 'solana', amount: 10_000_000_000n, category: 'tax', desc: 'Tax payment' },
+  ]
+
+  for (const tx of transactions) {
+    const record = await createCompliantTransaction(
+      'ethereum',
+      tx.chain,
+      tx.amount,
+      tx.category,
+      tx.desc
+    )
+    db.addRecord(record)
+  }
+
+  // 3. Generate report
+  console.log('\n=== Generating Report ===')
+  const report = await generateQuarterlyReport(db, 'Q4', 2024, auditKey)
+
+  console.log('Report Summary:')
+  console.log('  Total transactions:', report.summary.totalTransactions)
+  console.log('  Total volume:', report.summary.totalVolume)
+  console.log('  Categories:', Object.keys(report.summary.byCategory))
+
+  // 4. Export report
+  console.log('\n=== Exporting Report ===')
+  const exported = {
+    json: reportExporter.toJSON(report),
+    csv: reportExporter.toCSV(report),
+    audit: reportExporter.toAuditFormat(report),
+  }
+
+  console.log('Generated exports:', Object.keys(exported))
+
+  return { db, report, exported }
+}
+
+demonstrateComplianceReporting()
+  .then(() => console.log('\nCompliance reporting complete'))
+  .catch(err => console.error('Error:', err))
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Not Categorizing Transactions
+
+```typescript
+// ❌ Wrong - no categorization
+const record = { encrypted: data }
+// Later: can't filter by category
+```
+
+```typescript
+// ✅ Correct - categorize everything
+const record = {
+  encrypted: data,
+  category: 'tax',
+  tags: ['tax', 'federal', '2024'],
+}
+```
+
+### Pitfall 2: Using Single Viewing Key
+
+```typescript
+// ❌ Wrong - everyone sees everything
+const sharedKey = generateViewingKey()
+// Tax, audit, compliance all use same key
+```
+
+```typescript
+// ✅ Correct - separate keys per purpose
+const keys = {
+  tax: deriveViewingKey(master, 'tax'),
+  audit: deriveViewingKey(master, 'audit'),
+  compliance: deriveViewingKey(master, 'compliance'),
+}
+```
+
+### Pitfall 3: Missing Metadata
+
+```typescript
+// ❌ Wrong - no context
+const record = { encrypted: data, timestamp: Date.now() }
+// What was this transaction for?
+```
+
+```typescript
+// ✅ Correct - rich metadata
+const record = {
+  encrypted: data,
+  timestamp: Date.now(),
+  metadata: {
+    description: 'Vendor payment for Q4 services',
+    reference: 'INV-2024-1234',
+    tags: ['vendor', 'operational', 'q4'],
+  },
+}
+```
+
+### Pitfall 4: Not Handling Key Rotation
+
+```typescript
+// ❌ Wrong - same key forever
+const key = generateViewingKey()
+// Used for years
+```
+
+```typescript
+// ✅ Correct - yearly key rotation
+const key2024 = deriveViewingKey(master, '2024')
+const key2025 = deriveViewingKey(master, '2025')
+```
+
+### Pitfall 5: Exposing Unencrypted Data in Reports
+
+```typescript
+// ❌ Wrong - raw data in report
+const report = {
+  transactions: db.getAllTransactions(),  // Unencrypted!
+}
+```
+
+```typescript
+// ✅ Correct - only decrypt for authorized keys
+const report = {
+  transactions: db.decryptRecords(records, authorizedKey),
+}
+```
+
+## Best Practices
+
+1. **Hierarchical Keys:** Use year/quarter/month structure
+2. **Rich Metadata:** Include descriptions, references, tags
+3. **Audit Logs:** Log all report generation and access
+4. **Key Rotation:** Rotate viewing keys yearly
+5. **Retention Policies:** Define how long to keep records
+6. **Access Control:** Strictly control who gets which keys
+
+## Next Steps
+
+- [Handle batch transactions](/cookbook/07-batch-transactions) for bulk reporting
+- [Implement error handling](/cookbook/08-error-handling) for robust systems
+- [Test with mocks](/cookbook/10-testing-mocks) for compliance workflows
