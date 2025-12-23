@@ -4,6 +4,8 @@
 [![Astro](https://img.shields.io/badge/Astro-5.6.1-BC52EE?logo=astro&logoColor=white)](https://astro.build)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+**🏆 Winner — [Zypherpunk Hackathon](https://zypherpunk.xyz) NEAR Track ($4,000)**
+
 Official documentation for **SIP Protocol** - the privacy layer for cross-chain transactions via NEAR Intents + Zcash.
 
 **Live Site:** [docs.sip-protocol.org](https://docs.sip-protocol.org)
