@@ -7,6 +7,27 @@
 
 ---
 
+## Current Focus
+
+**Status:** M15 Complete | M16 Starting (Narrative Capture)
+**Strategy:** Same-chain expansion - documentation for Solana same-chain privacy
+
+### Phase 4 Documentation Priorities
+
+**M16 (Narrative Capture):**
+- Cryptographic privacy vs pool mixing explainer
+- PrivacyCash comparison article
+- Compliance/viewing keys documentation
+- Updated architecture diagrams for same-chain
+
+**M17 (Solana Same-Chain):**
+- Solana same-chain SDK guide
+- Jupiter DEX integration guide
+- Mobile SDK (React Native) documentation
+- Same-chain transaction examples
+
+---
+
 ## Quick Reference
 
 **Tech Stack:** Astro 5, Starlight, MDX
@@ -44,8 +65,22 @@ src/content/docs/
 ├── concepts/           # Core concepts (privacy, stealth, etc.)
 ├── sdk/                # SDK reference
 ├── api/                # API documentation
-└── guides/             # How-to guides
+├── specs/              # ZK proof specifications
+├── guides/             # How-to guides
+└── comparisons/        # [NEW] Privacy approach comparisons
 ```
+
+---
+
+## Key Concepts to Document
+
+| Concept | Description | Priority |
+|---------|-------------|----------|
+| Cryptographic vs Pool Privacy | Why Pedersen > pool mixing | High (M16) |
+| Viewing Keys | Compliance layer for institutions | High (M16) |
+| Same-Chain Privacy | Privacy without cross-chain settlement | High (M17) |
+| Stealth Addresses | EIP-5564 on Solana | Medium |
+| Proof Composition | Future multi-system proofs | Low (M19+) |
 
 ---
 
@@ -55,10 +90,12 @@ src/content/docs/
 - Use MDX for interactive documentation
 - Include code examples with syntax highlighting
 - Keep navigation structure shallow
+- Emphasize SIP's cryptographic advantages
 
 **DON'T:**
 - Duplicate content from SDK JSDoc
 - Add custom components without need
+- Make claims without technical backing
 
 ---
 
@@ -71,4 +108,13 @@ src/content/docs/
 
 ---
 
-**Last Updated:** 2025-12-02
+## Competitive Documentation
+
+When documenting SIP advantages:
+- **vs Pool Mixing (PrivacyCash):** Fixed amounts, correlation attacks, no compliance
+- **vs MPC (Arcium):** Setup assumptions, trust requirements, key management
+- Focus on: Any amount hidden, mathematical guarantees, viewing keys for auditors
+
+---
+
+**Last Updated:** 2025-12-27
