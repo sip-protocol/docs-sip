@@ -7,15 +7,27 @@ description: SIP Protocol development roadmap and milestones
 
 SIP Protocol is building the **privacy standard for Web3** — like HTTPS for the internet.
 
+## External Validation
+
+> **"Privacy creates network effects: privacy differentiates chains and creates chain lock-in."**
+> — Andreessen Horowitz, [Big Ideas 2026](https://a16z.com/newsletter/big-ideas-2026-part-3/)
+
+a16z's December 2025 thesis validates SIP's core positioning as privacy middleware.
+
 ## Current Status
 
-- **Phase**: 3 of 4 Complete (Foundation → Standard → Ecosystem)
-- **Progress**: M15 Complete
+- **Phase**: 3 of 5 Complete (Foundation → Standard → Ecosystem → Same-Chain → Moat)
+- **Progress**: M15 Complete, M16 Starting
 - **SDK Version**: ![npm version](https://img.shields.io/npm/v/@sip-protocol/sdk)
 - **Build Status**: ![CI](https://github.com/sip-protocol/sip-protocol/actions/workflows/ci.yml/badge.svg)
+- **Test Coverage**: 2,757 tests passing
 - **Packages**: 6 (@sip-protocol/sdk, types, react, cli, api + website)
 - **Chains**: 15+ supported
 - **Live**: [sip-protocol.org](https://sip-protocol.org)
+
+### Achievement
+
+🏆 **Zypherpunk Hackathon NEAR Track Winner** ($4,000) — December 2025
 
 ## Phases Overview
 
@@ -55,15 +67,30 @@ Developer experience and application layer.
 | M14 | Developer Experience (React, CLI, API) | ✅ |
 | M15 | Application Layer (Hardware Wallets) | ✅ |
 
-### Phase 4: Future (M16-M18) 🔲 Planned
+### Phase 4: Same-Chain Expansion (M16-M18) 🎯 In Progress
 
-Proof composition, technical moat, and protocol standardization.
+Capture the same-chain privacy market — 10-20x bigger than cross-chain only.
 
 | Milestone | Focus | Status |
 |-----------|-------|--------|
-| M16 | Proof Composition Research | 🔲 |
-| M17 | Technical Moat | 🔲 |
-| M18 | Standard Proposal (SIP-EIP) | 🔲 |
+| M16 | Narrative Capture & Positioning | 🎯 Starting |
+| M17 | Solana Same-Chain Privacy (Anchor) | 🔲 Planned |
+| M18 | Ethereum Same-Chain Privacy (Solidity) | 🔲 Planned |
+
+**Strategic context**: PrivacyCash (pool-based mixer) is gaining traction on Solana. SIP's cryptographic approach (Pedersen commitments + stealth addresses) is architecturally superior with compliance-ready viewing keys.
+
+### Phase 5: Technical Moat (M19-M22) 🔲 Future
+
+Build defensible technical advantages and institutional adoption.
+
+| Milestone | Focus | Status |
+|-----------|-------|--------|
+| M19 | Mina Integration & Proof Research | 🔲 Future |
+| M20 | Technical Moat Building | 🔲 Future |
+| M21 | Standard Proposal (SIP-EIP) | 🔲 Future |
+| M22 | Institutional + Agent Custody | 🔲 Future |
+
+**M22 highlights**: Viewing key APIs for institutional custodians (Fireblocks, Anchorage) and AI agent compliance per a16z's "Know Your Agent" thesis.
 
 ## Supported Chains
 
@@ -84,8 +111,9 @@ For detailed milestone tracking with GitHub issues, see the [full roadmap on the
 
 We welcome contributions! Current focus areas:
 
+- **M16**: Narrative capture and competitive positioning
+- **M17**: Solana same-chain privacy module
 - **Security**: External audit preparation
-- **M16**: Proof composition research
 - **Adoption**: Community feedback and integration support
 
 See [CONTRIBUTING.md](https://github.com/sip-protocol/sip-protocol/blob/main/CONTRIBUTING.md) for guidelines.
