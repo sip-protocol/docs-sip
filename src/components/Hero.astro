@@ -11,6 +11,11 @@
     <h1 class="hero-title">THE PRIVACY STANDARD FOR WEB3</h1>
     <p class="hero-tagline">One toggle. Complete privacy. Full compliance.</p>
 
+    <blockquote class="hero-endorsement">
+      <p>"Bridging tokens is easy, bridging secrets is hard."</p>
+      <cite>— <a href="https://a16zcrypto.com/posts/article/big-ideas-things-excited-about-crypto-2026/" target="_blank" rel="noopener">a16z Crypto, Big Ideas 2026</a></cite>
+    </blockquote>
+
     <div class="trust-badges">
       <a href="https://www.npmjs.com/package/@sip-protocol/sdk" target="_blank" rel="noopener" class="badge">
         <span class="badge-icon">$</span>
@@ -73,8 +78,48 @@
   .hero-tagline {
     font-size: clamp(1.1rem, 2.5vw, 1.4rem);
     color: var(--sl-color-gray-2);
-    margin: 0 0 2rem;
+    margin: 0 0 1.5rem;
     font-weight: 400;
+  }
+
+  .hero-endorsement {
+    margin: 0 auto 2rem;
+    padding: 1rem 1.5rem;
+    max-width: 500px;
+    background: rgba(139, 92, 246, 0.08);
+    border-left: 3px solid rgba(139, 92, 246, 0.5);
+    border-radius: 0 0.5rem 0.5rem 0;
+  }
+
+  .hero-endorsement p {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    font-style: italic;
+    color: var(--sl-color-gray-2);
+  }
+
+  .hero-endorsement cite {
+    font-size: 0.85rem;
+    color: var(--sl-color-gray-3);
+    font-style: normal;
+  }
+
+  .hero-endorsement a {
+    color: #c4b5fd;
+    text-decoration: none;
+  }
+
+  .hero-endorsement a:hover {
+    text-decoration: underline;
+  }
+
+  :root[data-theme='light'] .hero-endorsement {
+    background: rgba(124, 58, 237, 0.05);
+    border-left-color: rgba(124, 58, 237, 0.4);
+  }
+
+  :root[data-theme='light'] .hero-endorsement a {
+    color: #7c3aed;
   }
 
   .trust-badges {
