@@ -122,6 +122,15 @@ export default defineConfig({
             content: 'https://docs.sip-protocol.org/og-image.png',
           },
         },
+        // Umami Analytics (self-hosted, privacy-first)
+        {
+          tag: 'script',
+          attrs: {
+            defer: true,
+            src: 'https://analytics.sip-protocol.org/script.js',
+            'data-website-id': '5a56a99e-502d-499e-a282-c46a20e556e0',
+          },
+        },
       ],
     }),
   ],
