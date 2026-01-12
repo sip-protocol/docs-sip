@@ -9,6 +9,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-01-12
+
+### Added - M17: Solana Same-Chain Privacy
+- **Solana same-chain privacy transfers** - Native SOL privacy without cross-chain
+- **CLI v2** - Interactive setup wizard with improved UX
+  - Guided configuration for new users
+  - New commands for Solana integration
+
+### Changed
+- Hackathon sprint updates for Solana Privacy Hack
+- RPC provider abstraction (Helius, QuickNode, Triton)
+
+## [0.7.2] - 2025-12-28
+
+### Fixed
+- **Dependency fixes** - Use workspace protocol for internal dependencies
+- **CI improvements** - Run build before typecheck for module resolution
+
+## [0.7.1] - 2025-12-28
+
+### Fixed
+- **ed25519 validation** - Proper validation for ed25519 keys in stealth addresses
+- **Noir circuits** - High-precision Field types for large values
+
+### Added
+- 🏆 Zypherpunk Hackathon NEAR Track Winner ($4,000)
+
+## [0.7.0] - 2025-12-04
+
+### Added - M15: Application Layer
+- **Hardware wallet support** - Ledger integration for secure key management
+- **WalletConnect v2** - Connect to any compatible wallet
+- **Production monitoring** - Sentry error tracking, Prometheus metrics
+- **Security hardening** - CORS configuration, input validation, rate limiting
+
+### Fixed
+- **API security** - Replace CORS wildcard with secure defaults
+- **Slippage validation** - Bounds checking for slippage tolerance
+- **Test stability** - Timer tolerance for flaky tests
+
+### Issues Closed
+- #181-#189: M15 Application Layer features
+- #206, #209, #211, #212: Production hardening
+- #213, #214: Monitoring integration
+- #222: CORS security fix
+
 ## [0.6.0] - 2025-12-03
 
 ### Added - M14: Developer Experience
@@ -229,6 +275,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Milestone | Highlights |
 |---------|------|-----------|------------|
+| 0.7.3 | 2026-01-12 | M17 | Solana same-chain privacy, CLI v2 |
+| 0.7.2 | 2025-12-28 | Bugfix | Dependency fixes, CI improvements |
+| 0.7.1 | 2025-12-28 | Bugfix | ed25519 validation, Noir Field types |
+| 0.7.0 | 2025-12-04 | M15 | Hardware wallets, monitoring, security |
 | 0.6.0 | 2025-12-03 | M14 | React hooks, CLI, REST API, docs |
 | 0.5.1 | 2025-12-03 | Bugfix | CI test fix, TypeScript build fix |
 | 0.5.0 | 2025-12-03 | M13 | Compliance, threshold keys, enterprise |

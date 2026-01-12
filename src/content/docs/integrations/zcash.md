@@ -297,4 +297,4 @@ try {
 
 ### Demo
 
-Try the live demo at [sip-protocol.org/demo](https://sip-protocol.org/demo) to see Zcash integration in action.
+Try the live app at [app.sip-protocol.org](https://app.sip-protocol.org) to see SIP privacy features in action.

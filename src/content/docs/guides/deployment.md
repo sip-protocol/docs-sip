@@ -11,14 +11,16 @@ This document describes CI/CD and deployment for SIP Protocol packages.
 
 ## Repository Structure
 
-SIP Protocol uses two repositories:
+SIP Protocol uses multiple repositories:
 
 | Repository | Purpose | Deployment |
 |------------|---------|------------|
 | `sip-protocol/sip-protocol` | Core SDK + Types | npm registry |
-| `sip-protocol/sip-website` | Website + Demo | VPS (Docker) |
+| `sip-protocol/sip-website` | Marketing website | VPS (Docker) |
+| `sip-protocol/sip-app` | Privacy applications | VPS (Docker) |
+| `sip-protocol/docs-sip` | Documentation | VPS (Docker) |
 
-**Demo Application:** The interactive demo lives at [sip-protocol/sip-website](https://github.com/sip-protocol/sip-website) and is deployed to `sip-protocol.org/demo`.
+**Privacy App:** The interactive application lives at [sip-protocol/sip-app](https://github.com/sip-protocol/sip-app) and is deployed to `app.sip-protocol.org`.
 
 ---
 
