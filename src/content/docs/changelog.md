@@ -9,6 +9,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-01-12
+
+### Added - Hackathon Features
+- **Wallet surveillance module** - Transaction analysis for Encrypt.trade Track 1
+- **PrivacyCash backend** - Pool mixing privacy adapter integration
+- **CLI v2** - Interactive setup wizard with improved UX
+  - Guided configuration for new users
+  - New commands for privacy workflows
+
+### Changed
+- Hackathon sprint updates for Solana Privacy Hack
+
+## [0.7.2] - 2025-12-28
+
+### Fixed
+- **Dependency fixes** - Use workspace protocol for internal dependencies
+- **CI improvements** - Run build before typecheck for module resolution
+
+## [0.7.1] - 2025-12-28
+
+### Added
+- **Solana same-chain privacy** - Native SOL/SPL token privacy transfers
+  - `sendPrivateSPLTransfer` - Execute private transfers
+  - `scanForPayments` - Scan blockchain for incoming payments
+  - `claimStealthPayment` - Claim funds from stealth address
+- 🏆 Zypherpunk Hackathon NEAR Track Winner ($4,000)
+
+## [0.7.0] - 2025-12-04
+
+### Fixed
+- **ed25519 validation** - Proper validation for ed25519 keys in stealth addresses
+- **Noir circuits** - High-precision Field types for large values
+- **API security** - Replace CORS wildcard with secure defaults
+- **Slippage validation** - Bounds checking for slippage tolerance
+- **Test stability** - Timer tolerance for flaky tests
+
+### Changed
+- Production hardening across SDK and API packages
+- Improved error handling for cross-chain validation
+
+### Issues Closed
+- #227, #228: Production hardening and security fixes
+
 ## [0.6.0] - 2025-12-03
 
 ### Added - M14: Developer Experience
@@ -229,6 +272,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Milestone | Highlights |
 |---------|------|-----------|------------|
+| 0.7.3 | 2026-01-12 | Hackathon | Surveillance, PrivacyCash, CLI v2 |
+| 0.7.2 | 2025-12-28 | Bugfix | Dependency fixes, CI improvements |
+| 0.7.1 | 2025-12-28 | M17 | Solana same-chain privacy |
+| 0.7.0 | 2025-12-04 | Hardening | ed25519 validation, security fixes |
 | 0.6.0 | 2025-12-03 | M14 | React hooks, CLI, REST API, docs |
 | 0.5.1 | 2025-12-03 | Bugfix | CI test fix, TypeScript build fix |
 | 0.5.0 | 2025-12-03 | M13 | Compliance, threshold keys, enterprise |
