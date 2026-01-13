@@ -16,7 +16,7 @@ jobs:
         run: echo "month_year=$(date +'%B %Y')" >> $GITHUB_OUTPUT
 
       - name: Create audit issue
-        uses: peter-evans/create-issue-from-file@v5
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: "Monthly Docs Audit - ${{ steps.date.outputs.month_year }}"
           content-filepath: .github/DOCS_AUDIT_TEMPLATE.md
