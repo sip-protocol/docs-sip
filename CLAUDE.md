@@ -67,8 +67,14 @@ src/content/docs/
 ├── api/                # API documentation
 ├── specs/              # ZK proof specifications
 ├── guides/             # How-to guides
-└── comparisons/        # [NEW] Privacy approach comparisons
+├── comparisons/        # Privacy approach comparisons
+└── apps/               # [NEW] sip-app documentation
+    ├── payments/       # Private payments guide
+    ├── wallet/         # Wallet interface guide
+    └── dex/            # DEX integration guide
 ```
+
+**Note:** Application documentation for `app.sip-protocol.org` lives here. The sip-app repo contains the code, this repo documents usage.
 
 ---
 
