@@ -119,6 +119,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { label: 'Proof Providers', slug: 'sdk-api/proof-providers' },
+            { label: 'NEAR Privacy', slug: 'sdk-api/near-privacy' },
           ],
         },
       ],
