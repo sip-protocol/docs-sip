@@ -73,6 +73,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { label: 'SIP Specification', slug: 'specs/sip-spec' },
+            { label: 'EIP-5564 Implementation', slug: 'specs/eip-5564' },
             { label: 'ZK Architecture', slug: 'specs/zk-architecture' },
             { label: 'Funding Proof', slug: 'specs/funding-proof' },
             { label: 'Validity Proof', slug: 'specs/validity-proof' },
