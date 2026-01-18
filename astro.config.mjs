@@ -113,6 +113,13 @@ export default defineConfig({
           collapsed: true,
           autogenerate: { directory: 'reference' },
         },
+        {
+          label: 'SDK API',
+          collapsed: true,
+          items: [
+            { label: 'Proof Providers', slug: 'sdk-api/proof-providers' },
+          ],
+        },
       ],
       head: [
         {
