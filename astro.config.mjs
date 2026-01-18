@@ -39,6 +39,7 @@ export default defineConfig({
         {
           label: 'Guides',
           items: [
+            { label: 'NEAR Privacy', slug: 'guides/near-privacy' },
             { label: 'Solver Integration', slug: 'guides/solver-integration' },
             { label: 'API Migration', slug: 'guides/api-migration' },
           ],
