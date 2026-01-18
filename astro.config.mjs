@@ -39,6 +39,8 @@ export default defineConfig({
         {
           label: 'Guides',
           items: [
+            { label: 'NEAR Privacy', slug: 'guides/near-privacy' },
+            { label: 'Ethereum Privacy', slug: 'guides/ethereum-privacy' },
             { label: 'Solver Integration', slug: 'guides/solver-integration' },
             { label: 'API Migration', slug: 'guides/api-migration' },
           ],
@@ -71,6 +73,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { label: 'SIP Specification', slug: 'specs/sip-spec' },
+            { label: 'EIP-5564 Implementation', slug: 'specs/eip-5564' },
             { label: 'ZK Architecture', slug: 'specs/zk-architecture' },
             { label: 'Funding Proof', slug: 'specs/funding-proof' },
             { label: 'Validity Proof', slug: 'specs/validity-proof' },
@@ -112,6 +115,14 @@ export default defineConfig({
           label: 'API Reference',
           collapsed: true,
           autogenerate: { directory: 'reference' },
+        },
+        {
+          label: 'SDK API',
+          collapsed: true,
+          items: [
+            { label: 'Proof Providers', slug: 'sdk-api/proof-providers' },
+            { label: 'NEAR Privacy', slug: 'sdk-api/near-privacy' },
+          ],
         },
       ],
       head: [
