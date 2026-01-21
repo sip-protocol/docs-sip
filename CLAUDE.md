@@ -9,8 +9,9 @@
 
 ## Current Focus
 
-**Status:** M15 Complete | M16 Starting (Narrative Capture)
+**Status:** M16 Complete | M17 Active (Solana Same-Chain)
 **Strategy:** Same-chain expansion - documentation for Solana same-chain privacy
+**SDK Version:** 0.7.3 (ensure docs reference current version)
 
 ### Phase 4 Documentation Priorities
 
@@ -123,4 +124,4 @@ When documenting SIP advantages:
 
 ---
 
-**Last Updated:** 2025-12-27
+**Last Updated:** 2026-01-21
