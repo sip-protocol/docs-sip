@@ -17,11 +17,11 @@ a16z's December 2025 thesis validates SIP's core positioning as privacy middlewa
 ## Current Status
 
 - **Phase**: 3 of 5 Complete (Foundation → Standard → Ecosystem → Same-Chain → Moat)
-- **Progress**: M15 Complete, M16 Starting
+- **Progress**: M16 Complete, M17 Active
 - **SDK Version**: ![npm version](https://img.shields.io/npm/v/@sip-protocol/sdk)
 - **Build Status**: ![CI](https://github.com/sip-protocol/sip-protocol/actions/workflows/ci.yml/badge.svg)
-- **Test Coverage**: 2,757 tests passing
-- **Packages**: 6 (@sip-protocol/sdk, types, react, cli, api + website)
+- **Test Coverage**: 6,850+ tests passing
+- **Packages**: 7 (@sip-protocol/sdk, types, react, react-native, cli, api + website)
 - **Chains**: 15+ supported
 - **Live**: [sip-protocol.org](https://sip-protocol.org)
 
