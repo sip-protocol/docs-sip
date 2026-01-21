@@ -27,7 +27,7 @@ a16z's December 2025 thesis validates SIP's core positioning as privacy middlewa
 
 ### Achievement
 
-🏆 **Zypherpunk Hackathon NEAR Track Winner** ($4,000) — December 2025
+🏆 **Zypherpunk Hackathon Winner — 3 Tracks** ($6,500: NEAR $4,000 + Tachyon $500 + pumpfun $2,000) — December 2025
 
 ## Phases Overview
 
