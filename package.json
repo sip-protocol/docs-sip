@@ -12,9 +12,9 @@
     "docs:api:clean": "rm -rf src/content/docs/reference && npm run docs:api"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.37.3",
-    "astro": "^5.16.11",
-    "playwright": "^1.57.0",
+    "@astrojs/starlight": "^0.37.6",
+    "astro": "^5.17.1",
+    "playwright": "^1.58.1",
     "rehype-mermaid": "^3.0.0",
     "sharp": "^0.34.2"
   },
