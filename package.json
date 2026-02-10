@@ -12,16 +12,16 @@
     "docs:api:clean": "rm -rf src/content/docs/reference && npm run docs:api"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.37.3",
-    "astro": "^5.16.11",
-    "playwright": "^1.57.0",
+    "@astrojs/starlight": "^0.37.6",
+    "astro": "^5.17.1",
+    "playwright": "^1.58.2",
     "rehype-mermaid": "^3.0.0",
     "sharp": "^0.34.2"
   },
   "devDependencies": {
-    "@sip-protocol/sdk": "^0.7.3",
-    "@sip-protocol/types": "^0.2.1",
+    "@sip-protocol/sdk": "^0.7.4",
+    "@sip-protocol/types": "^0.2.2",
     "typedoc": "^0.28.16",
-    "typedoc-plugin-markdown": "^4.4.0"
+    "typedoc-plugin-markdown": "^4.10.0"
   }
 }
