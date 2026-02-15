@@ -48,23 +48,17 @@ jobs:
             echo "⏭️ No rebuild needed - versions match"
           fi
 
-  rebuild-and-deploy:
+  create-pr:
     needs: check-sdk-version
     if: needs.check-sdk-version.outputs.should_rebuild == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
-
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_NAME: sip-protocol/docs-sip
+      pull-requests: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -72,57 +66,47 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Update SDK version in package.json
+      - name: Update SDK version
+        id: update
         run: |
           LATEST=${{ needs.check-sdk-version.outputs.latest_version }}
-          echo "📦 Updating @sip-protocol/sdk to $LATEST"
+          CURRENT=${{ needs.check-sdk-version.outputs.current_version }}
+          BRANCH="chore/bump-sdk-${LATEST}"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
 
-          # Update package.json with new version
           npm install @sip-protocol/sdk@$LATEST @sip-protocol/types@latest --save-dev
 
-          # Commit the version bump
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
           git add package.json package-lock.json
-          git diff --staged --quiet || git commit -m "chore: bump @sip-protocol/sdk to $LATEST"
-          git push
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "chore: bump @sip-protocol/sdk to $LATEST"
+          git push origin "$BRANCH"
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create PR
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LATEST=${{ steps.update.outputs.version }}
+          BRANCH=${{ steps.update.outputs.branch }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=raw,value=sdk-${{ needs.check-sdk-version.outputs.latest_version }}
+          # Check if PR already exists for this branch
+          EXISTING=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$EXISTING" ]; then
+            echo "PR #$EXISTING already exists for $BRANCH"
+            exit 0
+          fi
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          gh pr create \
+            --title "chore: bump @sip-protocol/sdk to $LATEST" \
+            --body "Automated SDK version bump from scheduled sync.
 
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.2.4
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: sip
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd ~/app
-            docker pull ghcr.io/sip-protocol/docs-sip:latest
-            docker compose up -d docs
-            docker image prune -f
-            echo "✅ Deployed docs with SDK ${{ needs.check-sdk-version.outputs.latest_version }}"
+Merging will trigger deploy-vps.yml to rebuild and deploy docs." \
+            --base main \
+            --head "$BRANCH"
 
   notify-skip:
     needs: check-sdk-version
