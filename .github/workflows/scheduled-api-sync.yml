@@ -102,9 +102,7 @@ jobs:
 
           gh pr create \
             --title "chore: bump @sip-protocol/sdk to $LATEST" \
-            --body "Automated SDK version bump from scheduled sync.
-
-Merging will trigger deploy-vps.yml to rebuild and deploy docs." \
+            --body "Automated SDK version bump from scheduled sync. Merging will trigger deploy-vps.yml to rebuild and deploy docs." \
             --base main \
             --head "$BRANCH"
 
