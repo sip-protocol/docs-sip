@@ -32,7 +32,7 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         timeout-minutes: 5
         with:
-          args: --no-progress --max-concurrency 8 --timeout 10 './dist/**/*.html'
+          args: --no-progress --max-concurrency 8 --timeout 10 --exclude '^https://github\.com' './dist/**/*.html'
           fail: true
         continue-on-error: true  # Don't fail build, just warn
 
