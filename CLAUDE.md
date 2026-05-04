@@ -124,4 +124,27 @@ When documenting SIP advantages:
 
 ---
 
+## SENTINEL Mirror
+
+Source of truth: `sip-protocol/sipher` repo at `docs/sentinel/*.md`. Files in `src/content/docs/sipher/sentinel/*.mdx` are hand-synced mirrors.
+
+**When the source changes, apply these six transforms:**
+
+1. Prepend `--- title / description ---` frontmatter
+2. Strip the source's leading `# H1` (NOT the `# …` lines inside ` ```bash ` code fences — those are shell comments, not H1s)
+3. GitHub admonitions → Starlight directives:
+   - `> [!WARNING]` → `:::caution`
+   - `> [!NOTE]` → `:::note`
+   - `> [!IMPORTANT]` → `:::tip`
+   - `> [!CAUTION]` → `:::danger`
+4. Internal cross-links: `./xxx.md` → `/sipher/sentinel/xxx/` (anchors carry over unchanged)
+5. Source-code refs: `` `packages/agent/src/...` `` → absolute `https://github.com/sip-protocol/sipher/blob/main/...` URL with `#LN` line suffix (or `#L<N>-L<M>` for line ranges)
+6. Update banner's `Last synced: YYYY-MM-DD` to today's date
+
+After sync, run `pnpm build` and verify Starlight compiles cleanly.
+
+Spec for the original mirror: [`sipher/docs/superpowers/specs/2026-05-04-sentinel-docs-mirror-design.md`](https://github.com/sip-protocol/sipher/blob/main/docs/superpowers/specs/2026-05-04-sentinel-docs-mirror-design.md).
+
+---
+
 **Last Updated:** 2026-01-25
