@@ -124,6 +124,23 @@ export default defineConfig({
             { label: 'NEAR Privacy', slug: 'sdk-api/near-privacy' },
           ],
         },
+        {
+          label: 'Sipher',
+          collapsed: true,
+          items: [
+            {
+              label: 'SENTINEL',
+              collapsed: false,
+              items: [
+                { label: 'Overview', slug: 'sipher/sentinel/overview' },
+                { label: 'REST API', slug: 'sipher/sentinel/rest-api' },
+                { label: 'Agent Tools', slug: 'sipher/sentinel/tools' },
+                { label: 'Configuration', slug: 'sipher/sentinel/config' },
+                { label: 'Audit Log', slug: 'sipher/sentinel/audit-log' },
+              ],
+            },
+          ],
+        },
       ],
       head: [
         {
