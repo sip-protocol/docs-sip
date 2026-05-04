@@ -1,0 +1,67 @@
+---
+title: SENTINEL Configuration
+description: 15 environment variables that tune SENTINEL — modes, scanner intervals, threat detection, autonomy thresholds, rate limits, LLM tuning.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+<Aside type="note" title="Source of truth">
+This page mirrors [`docs/sentinel/config.md`](https://github.com/sip-protocol/sipher/blob/main/docs/sentinel/config.md) in the [sipher repo](https://github.com/sip-protocol/sipher). For the latest, always check the source. Last synced: **`<YYYY-MM-DD>`**.
+</Aside>
+
+All SENTINEL behavior is tuned via environment variables. Read at startup by `getSentinelConfig` in [`packages/agent/src/sentinel/config.ts`](https://github.com/sip-protocol/sipher/blob/main/packages/agent/src/sentinel/config.ts). Defaults shown below are verified against that file as of the `Last verified` date.
+
+:::note
+Boolean env vars use string parsing and polarity matters:
+- `SENTINEL_THREAT_CHECK` and `SENTINEL_BLACKLIST_AUTONOMY` default to **`true`** — set to the literal string `'false'` to disable.
+- `SENTINEL_BLOCK_ON_ERROR` defaults to **`false`** — set to the literal string `'true'` to enable.
+:::
+
+:::note
+`SENTINEL_MODE` and `SENTINEL_PREFLIGHT_SCOPE` use an allowlist parser: any unrecognized value falls through to the default. There is no validation error.
+:::
+
+## Mode
+
+| Var | Type | Default | Valid values | What it tunes |
+|---|---|---|---|---|
+| `SENTINEL_MODE` | enum | `yolo` | `yolo` \| `advisory` \| `off` | Whether SENTINEL blocks (`block` decisions only in `yolo`), also pauses for `flag` in `advisory`, or skips all assessments entirely in `off`. See [README operating modes](./README.md#operating-modes). |
+| `SENTINEL_PREFLIGHT_SCOPE` | enum | `fund-actions` | `fund-actions` \| `critical-only` \| `never` | Which agent tools trigger a pre-execution risk check. `fund-actions` covers all fund-moving tools; `critical-only` restricts to the highest-risk subset; `never` disables preflight entirely. |
+| `SENTINEL_PREFLIGHT_SKIP_AMOUNT` | number (SOL) | `0.1` | any non-negative | Skip preflight when the action amount is below this threshold. Reduces LLM calls for small routine transfers. |
+
+## Scanner
+
+| Var | Type | Default | Valid values | What it tunes |
+|---|---|---|---|---|
+| `SENTINEL_SCAN_INTERVAL` | number (ms) | `60000` | any positive | Idle scanner cycle period. How often SENTINEL checks for pending work when the queue is empty. |
+| `SENTINEL_ACTIVE_SCAN_INTERVAL` | number (ms) | `15000` | any positive | Active scanner cycle period. How often SENTINEL ticks when work is already queued. |
+| `SENTINEL_AUTO_REFUND_THRESHOLD` | number (SOL) | `1` | any non-negative | Auto-refund when a timed-out deposit is at or above this size. Smaller deposits are left for manual review. |
+
+## Threat Detection
+
+| Var | Type | Default | Valid values | What it tunes |
+|---|---|---|---|---|
+| `SENTINEL_THREAT_CHECK` | boolean | `true` | `true` \| `false` (literal strings) | Set to `'false'` to disable runtime threat checks across all assessments. Useful in isolated dev/test environments. |
+| `SENTINEL_LARGE_TRANSFER_THRESHOLD` | number (SOL) | `10` | any positive | Transfers at or above this size are flagged for elevated review regardless of other signals. |
+
+## Autonomy
+
+| Var | Type | Default | Valid values | What it tunes |
+|---|---|---|---|---|
+| `SENTINEL_BLACKLIST_AUTONOMY` | boolean | `true` | `true` \| `false` (literal strings) | Whether SENTINEL can add addresses to the blacklist autonomously without a manual admin override. Set to `'false'` to require human approval for all blacklist mutations. Used by [`addToBlacklist`](/sipher/sentinel/tools/#addtoblacklist). |
+| `SENTINEL_CANCEL_WINDOW_MS` | number (ms) | `30000` | any positive | How long a queued circuit-breaker action waits before auto-execution. Gives operators a window to cancel before SENTINEL acts. Used by [`scheduleCancellableAction`](/sipher/sentinel/tools/#schedulecancellableaction). |
+
+## Rate Limits
+
+| Var | Type | Default | Valid values | What it tunes |
+|---|---|---|---|---|
+| `SENTINEL_RATE_LIMIT_FUND_PER_HOUR` | number | `5` | any positive integer | Max fund-moving actions SENTINEL allows per wallet per hour before rate-limiting kicks in. |
+| `SENTINEL_RATE_LIMIT_BLACKLIST_PER_HOUR` | number | `20` | any positive integer | Max blacklist mutations (add + remove combined) per hour across all wallets. |
+
+## LLM
+
+| Var | Type | Default | Valid values | What it tunes |
+|---|---|---|---|---|
+| `SENTINEL_MODEL` | string | `openrouter:anthropic/claude-sonnet-4.6` | `provider:modelId` format | LLM model used by SentinelCore for risk assessments. Format matches Pi SDK's `provider:modelId` convention. Requires `OPENROUTER_API_KEY` when provider is `openrouter`. See [`packages/agent/src/sentinel/core.ts`](https://github.com/sip-protocol/sipher/blob/main/packages/agent/src/sentinel/core.ts). |
+| `SENTINEL_DAILY_BUDGET_USD` | number (USD) | `10` | any positive | Maximum daily LLM spend. SENTINEL falls back to deny-by-default when the budget is exceeded, preventing runaway costs from high-volume incident response. |
+| `SENTINEL_BLOCK_ON_ERROR` | boolean | `false` | `true` \| `false` (literal strings) | If `'true'`, any unhandled SENTINEL exception is treated as a `block` verdict (fail-closed). If `'false'`, exceptions fall through to allow (fail-open). |
