@@ -1,0 +1,193 @@
+---
+title: SENTINEL Audit Log
+description: SQLite audit-log schema for SENTINEL — four tables (blacklist, risk_history, pending_actions, decisions) with verbatim CREATE TABLE statements.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+<Aside type="note" title="Source of truth">
+This page mirrors [`docs/sentinel/audit-log.md`](https://github.com/sip-protocol/sipher/blob/main/docs/sentinel/audit-log.md) in the [sipher repo](https://github.com/sip-protocol/sipher). For the latest, always check the source. Last synced: **2026-05-04**.
+</Aside>
+
+
+Every SENTINEL decision and state change is logged to SQLite. Read via [`GET /api/sentinel/decisions`](/sipher/sentinel/rest-api/#get-apisentineldecisions) and [`GET /api/sentinel/blacklist`](/sipher/sentinel/rest-api/#get-apisentinelblacklist), or directly via `sqlite3` against `$DB_PATH`.
+
+## Tables
+
+Four tables hold the audit surface. All schemas below are copied verbatim from [`packages/agent/src/db.ts`](https://github.com/sip-protocol/sipher/blob/main/packages/agent/src/db.ts).
+
+---
+
+### sentinel_blacklist
+
+Soft-deletable list of blocked addresses. Insert via [`POST /api/sentinel/blacklist`](/sipher/sentinel/rest-api/#post-apisentinelblacklist); soft-remove via [`DELETE /api/sentinel/blacklist/:id`](/sipher/sentinel/rest-api/#delete-apisentinelblacklistid). Removed rows are kept with `removed_at`/`removed_by`/`removed_reason` set — never physically deleted.
+
+```sql
+CREATE TABLE IF NOT EXISTS sentinel_blacklist (
+  id              TEXT PRIMARY KEY,
+  address         TEXT NOT NULL,
+  reason          TEXT NOT NULL,
+  severity        TEXT NOT NULL,
+  added_by        TEXT NOT NULL,
+  added_at        TEXT NOT NULL,
+  expires_at      TEXT,
+  removed_at      TEXT,
+  removed_by      TEXT,
+  removed_reason  TEXT,
+  source_event_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_blacklist_active
+  ON sentinel_blacklist(address) WHERE removed_at IS NULL;
+```
+
+**Sample row** (a soft-removed test entry from the T2 capture):
+
+```json
+[{"id":"01KQP25BM8RVZJ92CTANFDNTMG","address":"BAD11111111111111111111111111111111111111","reason":"spec capture sample","severity":"low","added_by":"admin:C1phrE76Wrkmt1GP6Aa9RjCeLDKHZ7p4MPVRuPa8x85N","added_at":"2026-05-03T04:39:49.128Z","expires_at":null,"removed_at":"2026-05-03T04:39:49.146Z","removed_by":"admin:C1phrE76Wrkmt1GP6Aa9RjCeLDKHZ7p4MPVRuPa8x85N","removed_reason":"spec capture cleanup","source_event_id":null}]
+```
+
+**Index:** `idx_blacklist_active` is a partial index on `address` filtered to active (non-removed) rows. Keeps active-blacklist lookups O(log N) without scanning soft-removed history.
+
+---
+
+### sentinel_risk_history
+
+Past risk assessments per address. Populated by SentinelCore after every `POST /assess` call and by autonomous scanner runs. Each row captures the assessed risk level, numeric score, reasons array (stored as JSON text), and a recommendation string.
+
+```sql
+CREATE TABLE IF NOT EXISTS sentinel_risk_history (
+  id              TEXT PRIMARY KEY,
+  address         TEXT NOT NULL,
+  context_action  TEXT,
+  wallet          TEXT,
+  risk            TEXT NOT NULL,
+  score           INTEGER NOT NULL,
+  reasons         TEXT NOT NULL,
+  recommendation  TEXT NOT NULL,
+  decision_id     TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_risk_history
+  ON sentinel_risk_history(address, created_at DESC);
+```
+
+**Sample row:** `[]` — empty in a fresh capture. Populated by `/assess` calls and autonomous scan runs.
+
+**Index:** `idx_risk_history` on `(address, created_at DESC)` — supports efficient per-address history queries ordered by recency.
+
+---
+
+### sentinel_pending_actions
+
+Circuit-breaker queue. Populated when an action is scheduled to fire after a cancellation window (see [`SENTINEL_CANCEL_WINDOW_MS`](/sipher/sentinel/config/#autonomy)). Cancel via [`POST /api/sentinel/circuit-breaker/:id/cancel`](/sipher/sentinel/rest-api/#post-apisentinelcircuit-breakeridcancel). The `status` column transitions through `pending` → `executed` or `cancelled`.
+
+```sql
+CREATE TABLE IF NOT EXISTS sentinel_pending_actions (
+  id             TEXT PRIMARY KEY,
+  action_type    TEXT NOT NULL,
+  payload        TEXT NOT NULL,
+  reasoning      TEXT NOT NULL,
+  wallet         TEXT,
+  scheduled_at   TEXT NOT NULL,
+  execute_at     TEXT NOT NULL,
+  status         TEXT NOT NULL,
+  executed_at    TEXT,
+  cancelled_at   TEXT,
+  cancelled_by   TEXT,
+  cancel_reason  TEXT,
+  result         TEXT,
+  decision_id    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pending_due
+  ON sentinel_pending_actions(execute_at) WHERE status = 'pending';
+```
+
+**Sample row:** `[]` — empty in a fresh capture. Populated by `scheduleCancellableAction` when SENTINEL queues a deferred fund-moving action.
+
+**Index:** `idx_pending_due` is a partial index on `execute_at` filtered to `status = 'pending'`. The action-runner polls this index to find overdue actions without scanning completed or cancelled rows.
+
+---
+
+### sentinel_decisions
+
+The decision log. One row per LLM-mediated assessment. Read via [`GET /api/sentinel/decisions`](/sipher/sentinel/rest-api/#get-apisentineldecisions).
+
+```sql
+CREATE TABLE IF NOT EXISTS sentinel_decisions (
+  id                TEXT PRIMARY KEY,
+  invocation_source TEXT NOT NULL,
+  trigger_event_id  TEXT,
+  trigger_context   TEXT,
+  model             TEXT NOT NULL,
+  duration_ms       INTEGER NOT NULL,
+  tool_calls        TEXT NOT NULL,
+  reasoning         TEXT,
+  verdict           TEXT NOT NULL,
+  verdict_detail    TEXT,
+  input_tokens      INTEGER,
+  output_tokens     INTEGER,
+  cost_usd          REAL,
+  created_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_decisions_trigger
+  ON sentinel_decisions(trigger_event_id);
+CREATE INDEX IF NOT EXISTS idx_decisions_source
+  ON sentinel_decisions(invocation_source, created_at DESC);
+```
+
+**Sample row** (from the T2 `/assess` capture):
+
+```json
+[{"id":"01KQP24PG0KZCJVWJDQM8H3JAY","invocation_source":"preflight","trigger_event_id":null,"trigger_context":"{\"action\":\"vault_refund\",\"wallet\":\"C1phrE76Wrkmt1GP6Aa9RjCeLDKHZ7p4MPVRuPa8x85N\",\"amount\":1.5}","model":"openrouter:anthropic/claude-sonnet-4.6","duration_ms":440,"tool_calls":"[]","reasoning":"","verdict":"block","verdict_detail":"{\"reason\":\"schema violation\"}","input_tokens":0,"output_tokens":0,"cost_usd":0.0,"created_at":"2026-05-03T04:39:27.489Z"}]
+```
+
+**Indexes:**
+- `idx_decisions_trigger` — links a decision back to the originating event (e.g., a deposit txid), enabling correlation between a preflight block and the transaction that triggered it.
+- `idx_decisions_source` — supports `GET /decisions?source=...` filtering ordered by recency; covers all invocation sources (`preflight`, `autonomous`, `manual`).
+
+---
+
+## Retention
+
+No automatic cleanup — rows accumulate indefinitely. There are no `DELETE FROM sentinel_*`, prune jobs, or TTL sweeps in the codebase. Manual prune via SQL when needed:
+
+```sql
+-- Remove decisions older than 90 days
+DELETE FROM sentinel_decisions WHERE created_at < datetime('now', '-90 days');
+
+-- Remove soft-deleted blacklist entries older than 1 year
+DELETE FROM sentinel_blacklist
+  WHERE removed_at IS NOT NULL
+    AND removed_at < datetime('now', '-1 year');
+
+-- Remove completed/cancelled pending actions older than 30 days
+DELETE FROM sentinel_pending_actions
+  WHERE status IN ('executed', 'cancelled')
+    AND scheduled_at < datetime('now', '-30 days');
+```
+
+---
+
+## Reading the audit log
+
+```bash
+# Latest decisions across all sources
+sqlite3 -header -column "$DB_PATH" \
+  "SELECT id, invocation_source, verdict, model, cost_usd, created_at FROM sentinel_decisions ORDER BY created_at DESC LIMIT 20"
+
+# Active blacklist entries
+sqlite3 -header -column "$DB_PATH" \
+  "SELECT address, reason, severity, added_at FROM sentinel_blacklist WHERE removed_at IS NULL"
+
+# Recent risk assessments for a specific address
+sqlite3 -header -column "$DB_PATH" \
+  "SELECT created_at, risk, score, recommendation FROM sentinel_risk_history WHERE address = ? ORDER BY created_at DESC LIMIT 10"
+
+# Pending actions awaiting execution
+sqlite3 -header -column "$DB_PATH" \
+  "SELECT id, action_type, wallet, execute_at FROM sentinel_pending_actions WHERE status = 'pending' ORDER BY execute_at ASC"
+```
+
+:::note
+`DB_PATH` env var defines the SQLite file location. Defaults: `/app/data/sipher.db` in production, `:memory:` for tests. See [`packages/agent/src/db.ts:244-245`](https://github.com/sip-protocol/sipher/blob/main/packages/agent/src/db.ts#L244-L245).
+:::
