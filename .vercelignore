@@ -1,0 +1,5 @@
+# Build output — Vercel rebuilds from source on every deploy.
+dist
+
+# Generated at build time by `npm run docs:api` (TypeDoc → src/content/docs/reference).
+src/content/docs/reference

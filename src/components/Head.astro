@@ -1,0 +1,82 @@
+---
+// Starlight <Head> override.
+//
+// Renders Mermaid diagrams in the browser. Build-time SVG rendering
+// (rehype-mermaid's img-svg strategy) needs a headless Chromium that Vercel's
+// build image cannot launch, so diagrams are emitted as <pre class="mermaid">
+// (the 'pre-mermaid' strategy) and rendered client-side here instead.
+//
+// The renderer is theme-aware (re-renders on Starlight light/dark toggle),
+// view-transition-safe (re-runs on astro:page-load), and lazy — mermaid's
+// chunk only downloads on pages that actually contain a diagram.
+import Default from '@astrojs/starlight/components/Head.astro';
+---
+
+<Default><slot /></Default>
+
+<script>
+  function getMermaidTheme(): 'dark' | 'default' {
+    const theme = document.documentElement.dataset.theme;
+    if (theme === 'dark') return 'dark';
+    if (theme === 'light') return 'default';
+    // 'auto' or unset → follow the OS preference.
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'default';
+  }
+
+  let mermaidModule: Promise<typeof import('mermaid').default> | undefined;
+  function loadMermaid() {
+    if (!mermaidModule) {
+      mermaidModule = import('mermaid').then((m) => m.default);
+    }
+    return mermaidModule;
+  }
+
+  let rendering = false;
+  let rerunQueued = false;
+
+  async function renderMermaid(): Promise<void> {
+    if (rendering) {
+      // A theme toggle / navigation landed mid-render; coalesce into one re-run.
+      rerunQueued = true;
+      return;
+    }
+    const nodes = Array.from(
+      document.querySelectorAll<HTMLElement>('pre.mermaid'),
+    );
+    if (nodes.length === 0) return;
+
+    rendering = true;
+    try {
+      const mermaid = await loadMermaid();
+      for (const node of nodes) {
+        // Cache the original diagram source: mermaid replaces the node content
+        // with an <svg>, so we need the source to re-render on theme changes.
+        if (node.dataset.source === undefined) {
+          node.dataset.source = node.textContent ?? '';
+        }
+        node.removeAttribute('data-processed');
+        node.textContent = node.dataset.source;
+      }
+      mermaid.initialize({ startOnLoad: false, theme: getMermaidTheme() });
+      await mermaid.run({ nodes });
+    } finally {
+      rendering = false;
+      if (rerunQueued) {
+        rerunQueued = false;
+        void renderMermaid();
+      }
+    }
+  }
+
+  // Initial render (full page loads, incl. first paint under view transitions).
+  void renderMermaid();
+  // Re-render after client-side navigations when view transitions are enabled.
+  document.addEventListener('astro:page-load', () => void renderMermaid());
+  // Re-render when the Starlight theme toggles.
+  new MutationObserver(() => void renderMermaid()).observe(
+    document.documentElement,
+    { attributes: true, attributeFilter: ['data-theme'] },
+  );
+</script>
