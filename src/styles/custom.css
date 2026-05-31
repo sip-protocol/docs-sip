@@ -59,3 +59,20 @@ a:hover {
 .hero:has(h1[data-page-title=""]) {
   display: none !important;
 }
+
+/* Client-rendered Mermaid diagrams (rehype-mermaid `pre-mermaid` strategy).
+   Kept in layout (visibility, not display) so mermaid can measure/process the
+   node; raw source stays hidden until rendering completes. See Head.astro. */
+pre.mermaid {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: center;
+}
+pre.mermaid:not([data-processed]) {
+  visibility: hidden;
+}
+pre.mermaid[data-processed] svg {
+  max-width: 100%;
+  height: auto;
+}

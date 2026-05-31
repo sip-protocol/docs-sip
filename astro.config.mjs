@@ -18,6 +18,8 @@ export default defineConfig({
       components: {
         // Custom SiteTitle with SDK version badge
         SiteTitle: './src/components/SiteTitle.astro',
+        // Override <Head> to inject client-side Mermaid rendering
+        Head: './src/components/Head.astro',
       },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/sip-protocol' },
@@ -164,7 +166,11 @@ export default defineConfig({
   ],
   markdown: {
     rehypePlugins: [
-      [rehypeMermaid, { strategy: 'img-svg', dark: true }],
+      // 'pre-mermaid' emits <pre class="mermaid"> for browser-side rendering.
+      // Build-time SVG rendering needs a headless Chromium, which Vercel's
+      // build image can't launch (missing system libs). The client renderer
+      // lives in src/components/Head.astro.
+      [rehypeMermaid, { strategy: 'pre-mermaid' }],
     ],
   },
 });
