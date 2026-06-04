@@ -116,7 +116,7 @@ export default defineConfig({
         {
           label: 'API Reference',
           collapsed: true,
-          autogenerate: { directory: 'reference' },
+          items: [{ autogenerate: { directory: 'reference', collapsed: true } }],
         },
         {
           label: 'SDK API',
