@@ -124,29 +124,44 @@ console.log('Send to:', ethAddress) // 0x742d35Cc6634C0532925a3b844Bc454e4438f44
 
 ### Scanning with View Tag
 
-The view tag enables efficient scanning:
+On EVM chains you fetch stealth-address announcements from your indexer or the
+`StealthAddressRegistry` contract, then check each announcement against your
+keys with `checkStealthAddress`. The view tag (first byte of the shared-secret
+hash) lets you cheaply reject most non-matching announcements before doing the
+full elliptic-curve check:
 
 ```typescript
-import { scanForStealthPayments } from '@sip-protocol/sdk'
+import { checkStealthAddress, deriveStealthPrivateKey } from '@sip-protocol/sdk'
 
-// Scan Ethereum for payments
-const payments = await scanForStealthPayments({
-  chain: 'ethereum',
-  viewingPrivateKey: myMetaAddress.viewingPrivateKey,
-  spendingPublicKey: myMetaAddress.metaAddress.spendingKey,
-  fromBlock: 19000000,
-  rpcUrl: 'https://mainnet.infura.io/v3/YOUR_KEY',
-})
+// announcements come from your indexer / on-chain registry events:
+// { stealthAddress, ephemeralPublicKey, viewTag, amount, txHash }
+for (const ann of announcements) {
+  const stealthAddress = {
+    address: ann.stealthAddress,
+    ephemeralPublicKey: ann.ephemeralPublicKey,
+    viewTag: ann.viewTag,
+  }
 
-for (const payment of payments) {
-  // View tag allows quick rejection of non-matching payments
-  if (payment.viewTag !== expectedViewTag) continue
+  // Full check: does this stealth address belong to us?
+  const isMine = checkStealthAddress(
+    stealthAddress,
+    myMetaAddress.spendingPrivateKey,
+    myMetaAddress.viewingPrivateKey,
+  )
+  if (!isMine) continue
 
   console.log('Payment found:', {
-    amount: ethers.formatEther(payment.amount),
-    txHash: payment.txHash,
-    block: payment.blockNumber,
+    amount: ethers.formatEther(ann.amount),
+    txHash: ann.txHash,
   })
+
+  // Derive the spending key so you can move the funds
+  const recovery = deriveStealthPrivateKey(
+    stealthAddress,
+    myMetaAddress.spendingPrivateKey,
+    myMetaAddress.viewingPrivateKey,
+  )
+  // recovery.privateKey controls ann.stealthAddress
 }
 ```
 
@@ -199,9 +214,10 @@ console.log('View tag:', prepared.stealthAddress?.viewTag)
 Privacy with viewing key for regulatory compliance:
 
 ```typescript
-import { createViewingKey, encryptForViewing } from '@sip-protocol/sdk'
+import { generateViewingKey, encryptForViewing } from '@sip-protocol/sdk'
 
-const viewingKey = createViewingKey()
+// Returns { key, path, hash } — symmetric, no public/private split
+const viewingKey = generateViewingKey('m/0/auditor')
 
 const prepared = await nearAdapter.prepareSwap(
   {
@@ -221,11 +237,9 @@ const encryptedAuditData = encryptForViewing(
     sender: senderAddress,
     recipient: recipientAddress,
     amount: '10.0',
-    asset: 'ETH',
     timestamp: Date.now(),
-    purpose: 'Payment for consulting services',
   },
-  auditorPublicKey,
+  viewingKey,
 )
 ```
 

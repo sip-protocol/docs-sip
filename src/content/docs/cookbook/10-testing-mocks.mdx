@@ -27,15 +27,16 @@ describe('SIP Integration Tests', () => {
   let sip: SIP
   let mockProvider: MockProofProvider
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create SIP instance in demo mode for testing
     sip = new SIP({
       network: 'testnet',
       mode: 'demo',  // Uses mock data, no real network calls
     })
 
-    // Create mock proof provider
+    // Create mock proof provider (isReady is false until initialized)
     mockProvider = new MockProofProvider()
+    await mockProvider.initialize()
 
     // Set proof provider
     sip.setProofProvider(mockProvider)
@@ -433,6 +434,7 @@ describe('SIP Integration Test Suite', () => {
     // Setup
     sip = new SIP({ network: 'testnet', mode: 'demo' })
     mockProvider = new MockProofProvider()
+    await mockProvider.initialize()  // isReady is false until initialized
     sip.setProofProvider(mockProvider)
 
     mockWallet = new MockWalletAdapter('solana')
@@ -629,6 +631,5 @@ expect(result.status).toBe('fulfilled')
 
 ## Next Steps
 
-- Learn about [E2E testing strategies](/guides/testing)
 - Review [SDK test suite](https://github.com/sip-protocol/sip-protocol/tree/main/packages/sdk/tests) for examples
-- Explore [CI/CD integration](/guides/ci-cd) for automated testing
+- Handle [errors gracefully](/cookbook/08-error-handling) in your integration tests

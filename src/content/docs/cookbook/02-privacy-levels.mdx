@@ -42,9 +42,9 @@ const transparentIntent = await sip.intent()
 console.log('Privacy level:', transparentIntent.privacyLevel)
 // Output: "transparent"
 
-// No stealth address needed for transparent mode
-console.log('Has stealth address:', !!transparentIntent.recipientStealth)
-// Output: false (placeholder only)
+// No real stealth address in transparent mode - a placeholder is used
+console.log('Is placeholder stealth:', transparentIntent.recipientStealth.address === '0x0')
+// Output: true (placeholder address '0x0', not a real stealth address)
 
 // Execute and get public transaction hash
 const quotes = await sip.getQuotes(transparentIntent)
@@ -96,9 +96,17 @@ console.log('Transaction hash:', result.txHash)
 
 ### Step 3: Compliant Mode (Privacy + Audit)
 
-Use compliant mode when you need privacy but also audit capability:
+Use compliant mode when you need privacy but also audit capability.
+
+:::note[Compliant mode needs `createShieldedIntent`]
+The fluent `sip.intent()` builder has no viewing-key setter, and building a `COMPLIANT`
+intent without a viewing key throws (`viewingKey is required for compliant mode`). Use
+`createShieldedIntent` directly so you can pass `viewingKey` at creation time.
+:::
 
 ```typescript
+import { createShieldedIntent } from '@sip-protocol/sdk'
+
 // Generate viewing key for auditors
 const viewingKey = sip.generateViewingKey('/m/44/501/0/compliance')
 
@@ -112,19 +120,7 @@ console.log('Viewing key:', {
 sip.generateStealthKeys('near', 'compliant-wallet')
 const recipientAddress = sip.getStealthAddress()!
 
-// Compliant swap - private but auditable
-const compliantIntent = await sip.intent()
-  .input('solana', 'SOL', 1_000_000_000n)
-  .output('near', 'NEAR', 100_000_000n)
-  .privacy(PrivacyLevel.COMPLIANT)
-  .recipient(recipientAddress)
-  .slippage(1)
-  .build()
-
-// But wait - we need to pass the viewing key during creation!
-// Use createShieldedIntent directly for more control:
-import { createShieldedIntent } from '@sip-protocol/sdk'
-
+// Compliant swap - private but auditable (viewing key passed at creation)
 const compliantIntentWithKey = await createShieldedIntent({
   input: {
     asset: { chain: 'solana', symbol: 'SOL', address: null, decimals: 9 },
@@ -251,21 +247,22 @@ const intent = await sip.intent()
   .build()
 ```
 
-### Pitfall 2: Using Compliant Mode Without Viewing Key
+### Pitfall 2: Building Compliant Mode with the Fluent Builder
 
-**Problem:** Setting privacy to COMPLIANT but not providing a viewing key.
+**Problem:** Trying to create a COMPLIANT intent through `sip.intent()`. The builder has
+no viewing-key setter, and building COMPLIANT without one throws.
 
 ```typescript
-// ❌ Wrong - compliant mode requires viewing key
+// ❌ Wrong - the builder cannot attach a viewing key, so this throws
 const intent = await sip.intent()
   .privacy(PrivacyLevel.COMPLIANT)
-  .build()  // Error: viewingKey required for compliant mode
+  .build()  // Error: viewingKey is required for compliant mode
 ```
 
-**Solution:** Generate and provide viewing key for compliant mode.
+**Solution:** Use `createShieldedIntent` so you can pass the viewing key at creation.
 
 ```typescript
-// ✅ Correct
+// ✅ Correct - createShieldedIntent accepts viewingKey
 const viewingKey = sip.generateViewingKey()
 const intent = await createShieldedIntent({
   // ... other params

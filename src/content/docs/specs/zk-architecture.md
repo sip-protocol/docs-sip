@@ -177,10 +177,19 @@ flowchart TB
 
 ```typescript
 interface ProofProvider {
+  // Framework identity and readiness
+  readonly framework: ProofFramework  // 'noir' | 'mock'
+  readonly isReady: boolean
+  initialize(): Promise<void>
+  waitUntilReady(timeoutMs?: number): Promise<void>
+
+  // Proof generation
   generateFundingProof(params: FundingProofParams): Promise<ProofResult>
   generateValidityProof(params: ValidityProofParams): Promise<ProofResult>
   generateFulfillmentProof(params: FulfillmentProofParams): Promise<ProofResult>
-  verifyProof(proof: ZKProof, publicInputs: Field[]): Promise<boolean>
+
+  // Verification — public inputs travel inside the proof
+  verifyProof(proof: ZKProof): Promise<boolean>
 }
 ```
 
@@ -195,17 +204,29 @@ const sip = new SIP({
 })
 ```
 
-### NoirProofProvider (Planned)
+### NoirProofProvider
 
-For production:
+For production proof generation in Node.js. `NoirProofProvider` ships today, but to keep
+WASM out of server/SSR bundles it is **not** re-exported from the main barrel — import it
+from the `@sip-protocol/sdk/proofs/noir` subpath (browser code uses `BrowserNoirProvider`
+from `@sip-protocol/sdk/browser`):
 
 ```typescript
+import { NoirProofProvider } from '@sip-protocol/sdk/proofs/noir'
+
+// Config is optional — bundled circuit artifacts are used by default.
+// NoirProviderConfig = { artifactsPath?, backend?, verbose?, oraclePublicKey?, strictMode? }
+const proofProvider = new NoirProofProvider({
+  strictMode: true,        // require a configured oraclePublicKey for fulfillment proofs
+  // artifactsPath: '/circuits',  // override bundled artifacts (optional)
+})
+
+// The provider must finish initializing (compile circuits, load backend) before use
+await proofProvider.initialize()
+
 const sip = new SIP({
   network: 'mainnet',
-  proofProvider: new NoirProofProvider({
-    wasmPath: '/circuits/funding.wasm',
-    circuitPath: '/circuits/'
-  })
+  proofProvider,
 })
 ```
 

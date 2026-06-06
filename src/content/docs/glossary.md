@@ -28,8 +28,8 @@ Encryption that provides both confidentiality and integrity. SIP uses XChaCha20-
 A random value used in Pedersen commitments to hide the actual amount. Without knowing the blinding factor, observers cannot determine the committed value.
 
 ```typescript
-const { commitment, blindingFactor } = createCommitment(amount)
-// blindingFactor: random 256-bit scalar
+const { commitment, blinding } = commit(amount)
+// blinding: random 256-bit scalar
 ```
 
 ### Bridge
@@ -275,6 +275,8 @@ A solver's offer to fulfill an intent at specified terms (exchange rate, fees, t
 const quotes = await sip.getQuotes(intent)
 // quotes: array of solver offers
 ```
+
+_In the SDK's default demo mode these are mock quotes; real solver quotes require `mode: 'production'`._
 
 ---
 

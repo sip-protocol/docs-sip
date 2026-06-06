@@ -320,23 +320,26 @@ app.post('/api/get-viewing-key', authenticate, (req, res) => {
 const viewingKey = await fetch('/api/get-viewing-key').then(r => r.json())
 ```
 
-### Pitfall 4: Not Verifying Viewing Key Hash
+### Pitfall 4: Redundantly Pre-Checking the Viewing Key Hash
 
-**Problem:** Attempting decryption without checking hash first.
+**Good news:** `decryptWithViewing` already compares `viewingKeyHash` before doing any
+cipher work and throws a `CryptoError` on mismatch - so a wrong key fails fast, not
+"after expensive crypto operations." A `try/catch` around the call is sufficient.
 
 ```typescript
-// ❌ Wrong - expensive decryption attempt with wrong key
+// ✅ Fine - the SDK short-circuits on hash mismatch internally
 try {
-  const data = decryptWithViewing(encrypted, wrongKey)
+  const data = decryptWithViewing(encrypted, myKey)
 } catch (error) {
-  // Failed after expensive crypto operations
+  console.log('Wrong key or tampered data - decryption rejected')
 }
 ```
 
-**Solution:** Check viewing key hash before attempting decryption.
+**Optional:** If you want to branch without throwing (e.g. scanning many keys), you can
+still pre-check the hash yourself - this is a convenience, not a performance requirement.
 
 ```typescript
-// ✅ Correct - check hash first (cheap operation)
+// ✅ Optional - explicit branch instead of try/catch
 if (encrypted.viewingKeyHash !== myKey.hash) {
   console.log('Wrong key - skipping decryption')
 } else {

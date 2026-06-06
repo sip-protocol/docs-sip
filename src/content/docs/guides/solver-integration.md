@@ -95,14 +95,19 @@ async generateQuote(intent: SolverVisibleIntent): Promise<SolverQuote | null> {
   const outputWithSpread = baseOutput + (baseOutput * BigInt(spread)) / 10000n
   const fee = (outputWithSpread * BigInt(feePercent)) / 10000n
 
+  // Generate a unique quote ID (e.g. crypto.randomUUID())
+  const quoteId = crypto.randomUUID()
+  const validUntil = Math.floor(Date.now() / 1000) + 60
+
   return {
-    quoteId: generateQuoteId(),
+    quoteId,
     intentId: intent.intentId,
     solverId: this.info.id,
     outputAmount: outputWithSpread,
     estimatedTime: 30,
-    expiry: Math.floor(Date.now() / 1000) + 60,
+    expiry: validUntil,
     fee,
+    validUntil, // Required by SolverQuote
     signature: await this.signQuote(quoteId, outputWithSpread),
   }
 }
@@ -139,12 +144,14 @@ async fulfill(
       status: IntentStatus.FULFILLED,
       outputAmount: quote.outputAmount,
       fulfillmentProof: proof,
+      fulfilledAt: Date.now(),
     }
   } catch (error) {
     return {
       intentId: intent.intentId,
       status: IntentStatus.FAILED,
       error: error.message,
+      fulfilledAt: Date.now(),
     }
   }
 }
@@ -162,6 +169,7 @@ const capabilities: SolverCapabilities = {
   ]),
   supportsShielded: true,
   supportsCompliant: true,
+  supportsPartialFill: false, // Required: streaming / partial fills
   avgFulfillmentTime: 30,
 }
 ```

@@ -103,17 +103,19 @@ import { MockProofProvider, FundingProofParams } from '@sip-protocol/sdk'
 const proofProvider = new MockProofProvider()
 
 const params: FundingProofParams = {
-  commitmentHash: '0x...',
-  minimumAmount: 500n,
-  actualBalance: 1000n,
-  blindingFactor: '0x...'
+  balance: 1000n,                        // private: user's actual balance
+  minimumRequired: 500n,                 // public: minimum the intent needs
+  blindingFactor: new Uint8Array(32),    // private: commitment randomness
+  assetId: '0xABCD',                     // public: asset identifier
+  userAddress: '0x1234...',              // private: address for ownership proof
+  ownershipSignature: new Uint8Array(64) // private: signature proving ownership
 }
 
 const result = await proofProvider.generateFundingProof(params)
 
-if (result.valid) {
-  console.log('Proof:', result.proof)
-}
+// ProofResult = { proof, publicInputs, commitment? }
+console.log('Proof:', result.proof)
+console.log('Public inputs:', result.publicInputs)
 ```
 
 ## Proof Format
@@ -135,10 +137,8 @@ interface FundingProof {
 Solvers verify the funding proof before accepting an intent:
 
 ```typescript
-const isValid = await proofProvider.verifyProof(
-  fundingProof,
-  [commitmentHash, minimumAmount]
-)
+// verifyProof takes the proof only; public inputs travel inside the proof object
+const isValid = await proofProvider.verifyProof(fundingProof)
 
 if (!isValid) {
   throw new Error('Invalid funding proof')

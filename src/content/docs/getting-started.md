@@ -58,10 +58,11 @@ The NEAR Intents (1Click API) operates on **mainnet only**. There is no testnet 
 ## Your First Shielded Intent
 
 ```typescript
-import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
+import { SIP, PrivacyLevel, trackIntent } from '@sip-protocol/sdk'
 
 // 1. Initialize the SDK
 // Note: NEAR Intents is mainnet-only (no testnet)
+// By default the SDK runs in demo mode (mock quotes) — see the note below.
 const sip = new SIP({ network: 'mainnet' })
 
 // 2. Create a shielded intent using the builder pattern
@@ -73,14 +74,28 @@ const intent = await sip
   .build()
 
 // 3. Get quotes from solvers
-const quotes = await sip.getQuotes(intent.intent)
+const quotes = await sip.getQuotes(intent)
 
 // 4. Execute with best quote
+//    The builder returns a ShieldedIntent; wrap it with trackIntent()
+//    to get the TrackedIntent that execute() expects.
 if (quotes.length > 0) {
-  const result = await sip.execute(intent, quotes[0])
+  const result = await sip.execute(trackIntent(intent), quotes[0])
   console.log('Transaction:', result.txHash)
 }
 ```
+
+:::note[Quotes are mock by default]
+The SDK defaults to `mode: 'demo'`, which returns **mock quotes** for fast local development — `getQuotes()` does not hit any solver network. To fetch **real** solver quotes you must opt into production mode (mainnet only) and supply a NEAR Intents adapter:
+
+```typescript
+const sip = new SIP({
+  network: 'mainnet',
+  mode: 'production',
+  intentsAdapter: { jwtToken: process.env.NEAR_INTENTS_JWT },
+})
+```
+:::
 
 ### What Just Happened?
 
@@ -150,18 +165,21 @@ import {
   deriveStealthPrivateKey
 } from '@sip-protocol/sdk'
 
-// Recipient: Generate meta-address (share publicly)
-const metaAddress = generateStealthMetaAddress('ethereum')
+// Recipient: Generate meta-address (metaAddress is shared publicly;
+// keep spendingPrivateKey and viewingPrivateKey secret)
+const { metaAddress, spendingPrivateKey, viewingPrivateKey } =
+  generateStealthMetaAddress('ethereum')
 
-// Sender: Generate one-time stealth address
-const { stealthAddress, ephemeralPublicKey } = generateStealthAddress(metaAddress)
+// Sender: Generate one-time stealth address from the public meta-address
+const { stealthAddress } = generateStealthAddress(metaAddress)
 
-// Recipient: Derive private key to spend funds
+// Recipient: Derive the private key to spend funds.
+// The ephemeral public key the sender used is already carried on
+// stealthAddress, so only the recipient's two private keys are needed.
 const privateKey = deriveStealthPrivateKey(
   stealthAddress,
-  ephemeralPublicKey,
-  metaAddress.spendingKey,
-  metaAddress.viewingKey
+  spendingPrivateKey,
+  viewingPrivateKey
 )
 ```
 

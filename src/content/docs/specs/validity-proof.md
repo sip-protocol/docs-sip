@@ -142,11 +142,15 @@ import { MockProofProvider, ValidityProofParams } from '@sip-protocol/sdk'
 const proofProvider = new MockProofProvider()
 
 const params: ValidityProofParams = {
-  intentHash: '0x...',
-  senderCommitment: '0x...',
-  senderAddress: '0xABC...',
-  signature: '0x...',
-  blindingFactor: '0x...'
+  intentHash: '0x...',                       // public: hash of the intent
+  senderAddress: '0xABC...',                 // private: actual sender address
+  senderBlinding: new Uint8Array(32),        // private: sender commitment blinding
+  senderSecret: new Uint8Array(32),          // private: sender secret key
+  authorizationSignature: new Uint8Array(64),// private: signature authorizing the intent
+  nonce: new Uint8Array(32),                 // private: nonce for nullifier
+  timestamp: Date.now(),                     // public: intent timestamp
+  expiry: Date.now() + 3_600_000             // public: intent expiry
+  // senderPublicKey is optional — derived from senderSecret when omitted
 }
 
 const result = await proofProvider.generateValidityProof(params)

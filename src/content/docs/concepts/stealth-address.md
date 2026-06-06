@@ -124,12 +124,13 @@ const isMine = checkStealthAddress(
 
 if (isMine) {
   // Derive private key to claim funds
-  const privateKey = deriveStealthPrivateKey(
+  // (the ephemeral public key is read from stealthAddress.ephemeralPublicKey internally)
+  const recovery = deriveStealthPrivateKey(
     stealthAddress,
-    ephemeralPublicKey,
     spendingPrivateKey,
     viewingPrivateKey
   )
+  // recovery.privateKey is the spendable key for stealthAddress
 }
 ```
 
@@ -281,13 +282,12 @@ const isMine = checkStealthAddress(
 
 // Recipient claims
 if (isMine) {
-  const pk = deriveStealthPrivateKey(
+  const recovery = deriveStealthPrivateKey(
     stealthAddress,
-    ephemeralPublicKey,
     meta.spendingPrivateKey,
     meta.viewingPrivateKey
   )
-  // Use pk to spend from stealthAddress
+  // Use recovery.privateKey to spend from stealthAddress
 }
 ```
 
@@ -307,9 +307,9 @@ SIP supports multiple elliptic curves to enable stealth addresses across differe
 const ethMeta = generateStealthMetaAddress('ethereum')
 const btcMeta = generateStealthMetaAddress('bitcoin')
 
-// ed25519 - for Solana, NEAR
-const solMeta = generateStealthMetaAddress('solana', { curve: 'ed25519' })
-const nearMeta = generateStealthMetaAddress('near', { curve: 'ed25519' })
+// ed25519 - for Solana, NEAR (curve is auto-selected from the chain)
+const solMeta = generateStealthMetaAddress('solana')
+const nearMeta = generateStealthMetaAddress('near')
 ```
 
 ### Curve Differences

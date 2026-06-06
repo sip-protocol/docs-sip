@@ -36,9 +36,10 @@ import { ZcashRPCClient, createZcashClient } from '@sip-protocol/sdk'
 
 // Create client
 const zcash = createZcashClient({
-  rpcUrl: 'http://localhost:8232',
-  rpcUser: 'your-rpc-user',
-  rpcPassword: 'your-rpc-password'
+  host: '127.0.0.1',
+  port: 8232,
+  username: process.env.ZCASH_RPC_USER,
+  password: process.env.ZCASH_RPC_PASS
 })
 
 // Check connection
@@ -53,13 +54,23 @@ The `ZcashRPCClient` provides full access to Zcash's shielded infrastructure.
 ### Configuration
 
 ```typescript
-interface ZcashRPCConfig {
-  rpcUrl: string       // Zcash node RPC endpoint
-  rpcUser: string      // RPC authentication user
-  rpcPassword: string  // RPC authentication password
+interface ZcashConfig {
+  host?: string        // Node host (default from ZCASH_RPC_HOST)
+  port?: number        // RPC port (default: 8232; testnet: 18232)
+  username: string     // RPC authentication user
+  password: string     // RPC authentication password
+  testnet?: boolean    // Use testnet defaults (default: false)
   timeout?: number     // Request timeout (ms, default: 30000)
+  retries?: number     // Retry attempts on network error (default: 3)
+  retryDelay?: number  // Base retry delay in ms (default: 1000)
 }
 ```
+
+:::caution[Use HTTPS in production]
+`ZcashRPCClient` uses HTTP Basic Auth, which transmits credentials in
+base64-encoded cleartext. Always terminate the connection over TLS/HTTPS in
+production and store credentials securely (e.g. environment variables).
+:::
 
 ### Account Management
 
@@ -80,23 +91,44 @@ console.log('Unified address:', address)
 
 ### Shielded Transactions
 
+For high-level shielded operations, use `ZcashShieldedService` — it manages the
+account, balances, sends, and incoming notes on top of the RPC client.
+
 ```typescript
-// Get shielded balance
-const balance = await zcash.getShieldedBalance(zAddress)
-console.log('Shielded balance:', balance, 'ZEC')
+import { createZcashShieldedService } from '@sip-protocol/sdk'
 
-// Send shielded transaction
-const txid = await zcash.sendShielded({
-  from: senderZAddress,
-  to: recipientZAddress,
-  amount: 1.5,         // Amount in ZEC
-  memo: 'Private payment'  // Optional encrypted memo
+const service = createZcashShieldedService({
+  rpcConfig: {
+    host: '127.0.0.1',
+    port: 8232,
+    username: process.env.ZCASH_RPC_USER,
+    password: process.env.ZCASH_RPC_PASS
+  }
 })
-console.log('Transaction ID:', txid)
+await service.initialize() // creates/loads the account + default address
 
-// List shielded transactions
-const transactions = await zcash.listShieldedTransactions(zAddress)
+// Get shielded balance (confirmed total + per-pool breakdown, in ZEC)
+const balance = await service.getBalance()
+console.log('Shielded balance:', balance.confirmed, 'ZEC')
+
+// Send a shielded transaction (returns a txid once the operation completes)
+const result = await service.sendShielded({
+  to: recipientZAddress,
+  amount: 1.5,             // Amount in ZEC
+  memo: 'Private payment'  // Optional encrypted memo (max 512 bytes)
+})
+console.log('Transaction ID:', result.txid)
+
+// List incoming shielded notes (received transactions)
+const received = await service.getReceivedNotes()
 ```
+
+:::note
+On the lower-level `ZcashRPCClient`, the underlying methods are
+`getAccountBalance(account)` / `listUnspent()` (there is no
+`getShieldedBalance` or `listShieldedTransactions`). The service wraps these
+into the friendlier API shown above.
+:::
 
 ### Unified Addresses (ZIP-316)
 
@@ -131,41 +163,62 @@ SIP's viewing key system is inspired by Zcash's design, enabling selective discl
 ### SIP Viewing Keys
 
 ```typescript
-import { generateViewingKey, deriveViewingKeyHash } from '@sip-protocol/sdk'
+import { generateViewingKey } from '@sip-protocol/sdk'
 
-// Generate viewing key pair
-const { viewingKey, viewingKeyHash } = generateViewingKey(spendingKey)
+// Generate a viewing key (optional BIP32-style derivation path, default 'm/0')
+const vk = generateViewingKey('m/0')
 
-// Viewing key can be shared with auditors
-// viewingKeyHash is stored on-chain for verification
-console.log('Share with auditor:', viewingKey)
-console.log('On-chain hash:', viewingKeyHash)
+// vk.key can be shared with auditors; vk.hash identifies the key
+// (and is stored on-chain for verification).
+console.log('Share with auditor:', vk.key)
+console.log('On-chain hash:', vk.hash)
 ```
 
 ### Compliance Flow
 
+In compliant mode you supply the viewing key — the SDK stores only its hash
+on-chain (`viewingKeyHash`). Hold the key itself to encrypt disclosable details
+for auditors, and share it so they can decrypt.
+
 ```typescript
-import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
+import {
+  SIP,
+  PrivacyLevel,
+  generateViewingKey,
+  encryptForViewing,
+  decryptWithViewing,
+} from '@sip-protocol/sdk'
 
 const sip = new SIP({ network: 'mainnet' })
 
-// Create compliant transaction (generates viewing key)
-const intent = await sip
-  .intent()
-  .input('ethereum', 'ETH', amount)
-  .output('solana', 'SOL')
-  .privacy(PrivacyLevel.COMPLIANT)  // Includes viewing key
-  .build()
+// Generate the viewing key the auditor will receive.
+const vk = generateViewingKey('m/0')
 
-// Extract viewing key for auditor
-const viewingKey = intent.viewingKey
-console.log('Auditor viewing key:', viewingKey)
+// Create a compliant intent, supplying the viewing key.
+const intent = await sip.createIntent({
+  input: {
+    asset: { chain: 'ethereum', symbol: 'ETH', address: null, decimals: 18 },
+    amount,
+  },
+  output: {
+    asset: { chain: 'solana', symbol: 'SOL', address: null, decimals: 9 },
+    minAmount: 0n,
+    maxSlippage: 0.01,
+  },
+  privacy: PrivacyLevel.COMPLIANT,
+  viewingKey: vk.key,
+})
+console.log('On-chain viewing key hash:', intent.viewingKeyHash)
 
-// Auditor can verify transaction details
-const details = await sip.decryptWithViewingKey(
-  intent.encryptedData,
-  viewingKey
+// Encrypt the disclosable transaction details for the auditor.
+const encrypted = encryptForViewing(
+  { sender: '0x...', recipient: '...', amount: amount.toString(), timestamp: Date.now() },
+  vk,
 )
+
+// The auditor (holding vk) decrypts and verifies the details.
+const details = decryptWithViewing(encrypted, vk)
+console.log('Disclosed amount:', details.amount)
 ```
 
 ## Privacy Levels
@@ -201,28 +254,53 @@ await sip.intent()
 
 ## Zcash as Destination
 
-Route swaps through Zcash's shielded pool for maximum privacy:
+You can route swaps to ZEC so the shielded pool itself provides privacy on the
+destination side. Configure the Zcash RPC client separately — `SIPConfig` has no
+`zcashConfig` field.
+
+:::caution[No stealth output for Zcash]
+The NEAR Intents adapter does **not** derive stealth addresses for `zcash`
+output (stealth derivation is supported for EVM, Solana, and NEAR only). For a
+ZEC destination, use a direct recipient z-address with
+`PrivacyLevel.TRANSPARENT`; on-chain privacy then comes from Zcash's shielded
+pool rather than a SIP stealth address. To use SIP stealth output, target an
+EVM/Solana/NEAR chain instead.
+:::
 
 ```typescript
-import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
+import { SIP, PrivacyLevel, createZcashClient } from '@sip-protocol/sdk'
 
-const sip = new SIP({
-  network: 'mainnet',
-  zcashConfig: {
-    rpcUrl: 'http://localhost:8232',
-    rpcUser: 'user',
-    rpcPassword: 'pass'
-  }
+// Zcash RPC is configured separately from the SIP client.
+const zcash = createZcashClient({
+  host: '127.0.0.1',
+  port: 8232,
+  username: process.env.ZCASH_RPC_USER,
+  password: process.env.ZCASH_RPC_PASS
 })
 
-// Swap ETH → ZEC (shielded)
-const intent = await sip
-  .intent()
-  .input('ethereum', 'ETH', ethAmount)
-  .output('zcash', 'ZEC')
-  .recipientAddress(zAddress)  // Shielded z-address
-  .privacy(PrivacyLevel.SHIELDED)
-  .build()
+// Production mode is required for real NEAR Intents swaps (mainnet only).
+const sip = new SIP({
+  network: 'mainnet',
+  mode: 'production',
+  intentsAdapter: { jwtToken: process.env.NEAR_INTENTS_JWT }
+})
+
+// Swap ETH → ZEC. Zcash output uses a transparent (direct) recipient z-address;
+// pass it as the transparentRecipient argument to getQuotes().
+const params = {
+  input: {
+    asset: { chain: 'ethereum', symbol: 'ETH', address: null, decimals: 18 },
+    amount: ethAmount,
+  },
+  output: {
+    asset: { chain: 'zcash', symbol: 'ZEC', address: null, decimals: 8 },
+    minAmount: 0n,
+    maxSlippage: 0.01,
+  },
+  privacy: PrivacyLevel.TRANSPARENT,
+}
+
+const quotes = await sip.getQuotes(params, undefined, senderEthAddress, zAddress)
 ```
 
 ## Future: Proof Composition
@@ -252,10 +330,10 @@ SIP's roadmap includes composing proofs from multiple systems:
 ## Error Handling
 
 ```typescript
-import { ZcashRPCError, hasErrorCode, ErrorCode } from '@sip-protocol/sdk'
+import { ZcashRPCError } from '@sip-protocol/sdk'
 
 try {
-  const txid = await zcash.sendShielded(params)
+  const operationId = await zcash.sendShielded(params)
 } catch (error) {
   if (error instanceof ZcashRPCError) {
     console.error('Zcash RPC error:', error.code, error.message)

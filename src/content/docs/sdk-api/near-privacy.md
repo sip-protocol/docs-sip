@@ -244,13 +244,12 @@ Generate a stealth meta-address for ed25519 chains (NEAR, Solana).
 
 ```typescript
 generateEd25519StealthMetaAddress(
-  chain?: ChainType
+  chain: ChainId,
+  label?: string,
 ): {
-  spendingPublicKey: HexString
-  viewingPublicKey: HexString
+  metaAddress: StealthMetaAddress  // { spendingKey, viewingKey, chain, label? }
   spendingPrivateKey: HexString
   viewingPrivateKey: HexString
-  chain: ChainType
 }
 ```
 
@@ -258,22 +257,25 @@ generateEd25519StealthMetaAddress(
 
 | Name | Type | Description |
 |------|------|-------------|
-| `chain` | `ChainType` | Target chain (default: 'near') |
+| `chain` | `ChainId` | Target ed25519 chain (`'near'`, `'solana'`, `'aptos'`, `'sui'`) — required, no default |
+| `label` | `string` | Optional human-readable label stored on the meta-address |
+
+**Returns:** The public meta-address is **nested** under `metaAddress`, whose public components are `spendingKey` and `viewingKey` (not `spendingPublicKey`/`viewingPublicKey`).
 
 **Example:**
 
 ```typescript
 import { generateEd25519StealthMetaAddress } from '@sip-protocol/sdk'
 
-const metaAddress = generateEd25519StealthMetaAddress('near')
+const result = generateEd25519StealthMetaAddress('near')
 
-// Public (share these)
-console.log('Spending key:', metaAddress.spendingPublicKey)
-console.log('Viewing key:', metaAddress.viewingPublicKey)
+// Public (share these) — note the nested metaAddress
+console.log('Spending key:', result.metaAddress.spendingKey)
+console.log('Viewing key:', result.metaAddress.viewingKey)
 
 // Private (keep secret!)
-console.log('Spending private:', metaAddress.spendingPrivateKey)
-console.log('Viewing private:', metaAddress.viewingPrivateKey)
+console.log('Spending private:', result.spendingPrivateKey)
+console.log('Viewing private:', result.viewingPrivateKey)
 ```
 
 ### generateEd25519StealthAddress()
@@ -303,7 +305,8 @@ import {
 } from '@sip-protocol/sdk'
 
 const recipientMeta = generateEd25519StealthMetaAddress('near')
-const { stealthAddress, sharedSecret } = generateEd25519StealthAddress(recipientMeta)
+// Pass the inner StealthMetaAddress, not the wrapper object
+const { stealthAddress, sharedSecret } = generateEd25519StealthAddress(recipientMeta.metaAddress)
 
 // Convert to NEAR address for transaction
 const nearAddress = ed25519PublicKeyToNearAddress(stealthAddress.address)
@@ -316,21 +319,32 @@ Derive the private key for a received stealth payment.
 
 ```typescript
 deriveEd25519StealthPrivateKey(
+  stealthAddress: StealthAddress,
   spendingPrivateKey: HexString,
   viewingPrivateKey: HexString,
-  ephemeralPublicKey: HexString,
-): HexString
+): StealthAddressRecovery  // { stealthAddress, ephemeralPublicKey, privateKey }
 ```
 
 **Parameters:**
 
 | Name | Type | Description |
 |------|------|-------------|
+| `stealthAddress` | `StealthAddress` | The received stealth address (its `ephemeralPublicKey` is read internally) |
 | `spendingPrivateKey` | `HexString` | Recipient's spending private key |
 | `viewingPrivateKey` | `HexString` | Recipient's viewing private key |
-| `ephemeralPublicKey` | `HexString` | Ephemeral key from the transaction |
 
-**Returns:** Private key for the stealth address
+**Returns:** A `StealthAddressRecovery` object. The spendable key is on `.privateKey`.
+
+```typescript
+const recovery = deriveEd25519StealthPrivateKey(
+  stealthAddress,
+  spendingPrivateKey,
+  viewingPrivateKey,
+)
+// Use recovery.privateKey to spend from the stealth address
+```
+
+> **Note:** The returned `privateKey` is a raw little-endian ed25519 scalar, not a standard 32-byte seed. To derive its public key, multiply the base point by the scalar (see the SDK source for `deriveEd25519StealthPrivateKey`).
 
 ## Encoding Functions
 
@@ -353,7 +367,8 @@ import {
 } from '@sip-protocol/sdk'
 
 const meta = generateEd25519StealthMetaAddress('near')
-const encoded = encodeStealthMetaAddress(meta)
+// encodeStealthMetaAddress takes the inner StealthMetaAddress
+const encoded = encodeStealthMetaAddress(meta.metaAddress)
 // Output: "sip:near:0x...spending...:0x...viewing..."
 ```
 
@@ -403,39 +418,45 @@ Low-level client for NEAR 1Click API.
 ### Constructor
 
 ```typescript
-new OneClickClient(config?: OneClickClientConfig)
+new OneClickClient(config?: OneClickConfig)
 ```
 
 ### Configuration
 
 ```typescript
-interface OneClickClientConfig {
+interface OneClickConfig {
   /** API base URL */
   baseUrl?: string  // default: 'https://1click.chaindefuser.com'
 
   /** JWT authentication token */
   jwtToken?: string
+
+  /** Request timeout in milliseconds */
+  timeout?: number  // default: 30000
+
+  /** Custom fetch implementation */
+  fetch?: typeof fetch
 }
 ```
 
 ### Methods
 
-#### getQuote()
+#### quote()
 
 ```typescript
-getQuote(request: OneClickQuoteRequest): Promise<OneClickQuoteResponse>
+quote(request: OneClickQuoteRequest): Promise<OneClickQuoteResponse>
 ```
 
 #### getStatus()
 
 ```typescript
-getStatus(depositAddress: string): Promise<OneClickStatusResponse>
+getStatus(depositAddress: string, depositMemo?: string): Promise<OneClickStatusResponse>
 ```
 
-#### getSupportedTokens()
+#### getTokens()
 
 ```typescript
-getSupportedTokens(): Promise<DefuseToken[]>
+getTokens(): Promise<OneClickToken[]>
 ```
 
 ## Error Types
@@ -466,10 +487,10 @@ Common validation errors:
 const ED25519_CHAINS = ['solana', 'near', 'aptos', 'sui'] as const
 
 // Check if a chain uses ed25519
-function isEd25519Chain(chain: ChainType): boolean
+function isEd25519Chain(chain: ChainId): boolean
 
 // Get the curve type for a chain
-function getCurveForChain(chain: ChainType): 'secp256k1' | 'ed25519'
+function getCurveForChain(chain: ChainId): 'secp256k1' | 'ed25519'
 ```
 
 ## See Also
