@@ -15,12 +15,12 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 **Impact**: Medium - Reduces anonymity set size
 
-**Current Mitigations** (v0.1.0):
+**Current Mitigations** (shipped):
 - Stealth addresses provide unlinkable one-time addresses
 - View tags add scanning obfuscation (8-bit prefix)
 - Commitments hide amounts regardless of timing
 
-**Planned Mitigations** (v0.2.0+):
+**Planned Mitigations**:
 - Randomized submission delays
 - Transaction batching across users
 - Decoy transactions (research)
@@ -63,15 +63,15 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 ## Implementation Limitations
 
-### Mock Proofs (Current)
+### Proof Provider Selection
 
-**Issue**: Current proofs are mock implementations, not cryptographically sound.
+**Issue**: The SDK ships both a `MockProofProvider` (development/testing) and production-grade Noir providers. Selecting the mock provider in a production deployment provides no cryptographic soundness.
 
-**Impact**: High for production - Not secure for mainnet
+**Impact**: High if misconfigured - The mock provider is for tests only
 
-**Status**: Noir circuits planned for v0.2.0
+**Status**: Real ZK proofs are shipped. `NoirProofProvider` (`@sip-protocol/sdk/proofs/noir`) and `BrowserNoirProvider` (`@sip-protocol/sdk/browser`) generate UltraHonk proofs via Barretenberg. Use these for production.
 
-**Recommendation**: Use testnet only until real proofs available.
+**Recommendation**: Use `NoirProofProvider` / `BrowserNoirProvider` in production; the mock provider is restricted to tests and local development.
 
 ### Memory Safety
 
@@ -79,7 +79,7 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 **Impact**: Low - Mitigated by SDK implementation
 
-**Current Implementation** (v0.1.0):
+**Current Implementation** (shipped):
 - `secureWipe()` - Zeroizes Uint8Array buffers immediately after use
 - `withSecureBuffer()` - Auto-cleanup wrapper with guaranteed cleanup
 - `withSecureBufferSync()` - Synchronous version for non-async code
@@ -92,25 +92,15 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 **Recommendation**: Use hardware wallets for high-value operations. SDK handles memory cleanup for cryptographic operations.
 
-### No Hardware Wallet Support
+### Hardware Wallet Support
 
-**Issue**: Hardware wallet signing not implemented.
+**Issue**: High-value users need keys held in dedicated hardware.
 
-**Impact**: Medium - Limits security for high-value users
+**Impact**: Low - Hardware wallet signing is supported
 
-**Status**: Planned for future release
+**Status**: Shipped in M15 - Ledger and Trezor signing plus WalletConnect are supported.
 
-**Recommendation**: Use software wallets with appropriate security practices.
-
-### Single Proof Provider
-
-**Issue**: Only MockProofProvider currently available.
-
-**Impact**: Cannot use in production
-
-**Status**: NoirProofProvider planned
-
-**Recommendation**: Testing and development only.
+**Recommendation**: Use a hardware wallet for high-value operations.
 
 ## Cryptographic Limitations
 
@@ -132,13 +122,13 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 **Recommendation**: Monitor quantum computing developments. Current cryptographic assumptions remain secure for foreseeable future. Plan for migration post-NIST standardization.
 
-### No Trusted Setup... But Mock Proofs
+### No Trusted Setup
 
-**Issue**: While Noir doesn't require trusted setup, mock proofs provide no security.
+**Issue**: Some proving systems require a trusted setup ceremony, which adds a trust assumption.
 
-**Impact**: Security claim doesn't apply until real proofs
+**Impact**: None - SIP avoids this class of risk
 
-**Status**: Real proofs will use universal setup
+**Status**: SIP's Noir circuits compile to UltraHonk (Barretenberg), which uses a universal/updatable setup and requires no circuit-specific trusted setup ceremony.
 
 ### Fixed Generator Construction
 
@@ -178,13 +168,13 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 **Mitigation**: Multi-key encryption supports multiple viewers
 
-### No On-Chain Verification
+### On-Chain Verification Coverage
 
-**Issue**: ZK proofs are verified off-chain by solvers.
+**Issue**: On-chain verification currently covers the funding proof; other proof types are verified off-chain by solvers.
 
-**Impact**: Medium - Requires trust in solver verification
+**Impact**: Low-Medium - Funding proofs are verified on-chain; remaining proof types rely on solver verification
 
-**Status**: On-chain verification planned with real circuits
+**Status**: An on-chain `FundingVerifier` (UltraHonk `HonkVerifier`) is deployed on Sepolia and Arbitrum Sepolia testnets. On-chain verification for the remaining proof types is in progress.
 
 ## Operational Limitations
 
@@ -216,11 +206,13 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 ## Performance Limitations
 
-### Browser Proof Generation (Future)
+### Browser Proof Generation Performance
 
-**Issue**: Proof generation in browser may be slow.
+**Issue**: Proof generation in the browser is computationally intensive and can take a few seconds.
 
-**Expected**: 2-5 seconds per proof
+**Status**: Shipped - `BrowserNoirProvider` (`@sip-protocol/sdk/browser`) generates UltraHonk proofs client-side.
+
+**Expected**: ~2-5 seconds per proof depending on device
 
 **Mitigation**:
 - Web Workers for non-blocking
@@ -240,16 +232,16 @@ This document describes the current limitations of SIP Protocol and planned miti
 
 ## Summary Table
 
-| Limitation | Severity | Status | Timeline |
-|------------|----------|--------|----------|
-| Mock proofs | High | Planned | v0.2.0 |
-| Timing correlation | Medium | Mitigated | v0.1.0 |
-| Amount inference | Medium | Planned | v0.2.0 |
-| Memory safety | Low | Implemented | v0.1.0 |
-| Hardware wallets | Medium | Planned | v0.3.0 |
-| Quantum vulnerability | Low (long-term) | Monitoring | Post-v1.0 |
-| Partial fills | Low | Planned | v0.2.0 |
-| On-chain verification | Medium | Planned | v0.2.0 |
+| Limitation | Severity | Status | Notes |
+|------------|----------|--------|-------|
+| Proof provider misconfiguration | High | Mitigated | Real Noir/UltraHonk providers shipped; mock is test-only |
+| Timing correlation | Medium | Mitigated | Stealth + commitments shipped; batching/delays planned |
+| Amount inference | Medium | Planned | Output range commitments future |
+| Memory safety | Low | Implemented | `secureWipe()` / `withSecureBuffer()` shipped |
+| Hardware wallets | Low | Implemented | Ledger / Trezor / WalletConnect (M15) |
+| Quantum vulnerability | Low (long-term) | Monitoring | Post-NIST standardization |
+| Partial fills | Low | Planned | — |
+| On-chain verification | Low-Medium | Partial | FundingVerifier deployed (Sepolia, Arbitrum Sepolia); other proofs in progress |
 
 ## Reporting Issues
 

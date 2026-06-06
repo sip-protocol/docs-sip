@@ -19,7 +19,7 @@ We present SIP (Shielded Intents Protocol), a privacy layer that integrates with
 2. **Stealth addresses** following EIP-5564 to generate unlinkable one-time recipient addresses
 3. **Viewing keys** to enable selective disclosure for compliance requirements
 
-SIP operates as an application layer atop NEAR Intents, requiring no modifications to underlying blockchain infrastructure. Our implementation achieves sub-10ms overhead for privacy operations while maintaining full compatibility with existing multi-chain settlement flows.
+SIP operates as an application layer atop NEAR Intents, requiring no modifications to underlying blockchain infrastructure. Our implementation achieves sub-30ms overhead for privacy operations while maintaining full compatibility with existing multi-chain settlement flows.
 
 ## 1. Introduction
 
@@ -221,7 +221,7 @@ All libraries are Trail of Bits audited with constant-time implementations.
 | Zcash | On-chain privacy; SIP is application layer |
 | Tornado Cash | Fixed denominations; SIP is flexible |
 | Aztec | Requires L2; SIP works on existing chains |
-| Railgun | Single chain; SIP is multi-chain native |
+| Railgun | EVM-only; SIP is multi-chain native |
 
 ## 7. Conclusion
 

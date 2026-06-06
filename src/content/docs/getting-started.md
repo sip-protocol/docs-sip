@@ -11,7 +11,7 @@ Get up and running with the SIP Protocol SDK in minutes.
 
 ### Requirements
 
-- Node.js 18+
+- Node.js 20+
 - TypeScript 5.0+ (recommended)
 
 ### Package Installation

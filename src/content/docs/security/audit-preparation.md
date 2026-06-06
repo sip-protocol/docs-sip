@@ -40,8 +40,8 @@ This document outlines the security audit preparation for SIP Protocol.
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Test Coverage | 89.88% | >90% |
-| Passing Tests | 1,293/1,293 | 100% |
+| Test Coverage | >90% | >90% |
+| Passing Tests | 6,716 SDK (7,624+ total across packages) | 100% |
 | Type Safety | Strict | Strict |
 | Lint Errors | 0 | 0 |
 
@@ -90,7 +90,7 @@ All noble libraries are Trail of Bits audited:
 |---------|---------|--------------|
 | @noble/curves | ^1.3.0 | Audited |
 | @noble/hashes | ^1.3.3 | Audited |
-| @noble/ciphers | ^2.0.1 | Audited |
+| @noble/ciphers | ^2.2.0 | Audited |
 
 ### Other Dependencies
 
@@ -115,6 +115,10 @@ All noble libraries are Trail of Bits audited:
 2. Mock proof security (documented as non-production)
 
 ## Test Coverage
+
+:::note
+The per-module breakdown below is a point-in-time snapshot from the v0.1.0 audit-prep cycle. The current SDK (v0.9.0) ships 6,716 tests (7,624+ total across all packages). Run `pnpm test -- --run` against the repository for live counts and coverage.
+:::
 
 ### Unit Tests
 
@@ -195,10 +199,10 @@ For audit coordination:
 
 | Date | Auditor | Scope | Status |
 |------|---------|-------|--------|
-| Q1 2025 | Pending Selection | Full SDK + Circuits | Planned |
+| Feb 2026 | Solana Audit Subsidy V (auditor TBD) | Full SDK + Circuits | Planned (application in progress) |
 
 :::note
-Audit scheduling in progress. For audit inquiries, contact security@sip-protocol.org
+Audit scheduling in progress via the Solana Audit Subsidy V program (application deadline Feb 2026). For audit inquiries, contact security@sip-protocol.org
 :::
 
 ## Post-Audit Actions

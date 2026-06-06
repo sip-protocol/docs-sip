@@ -5,7 +5,11 @@ description: System architecture and design of SIP Protocol
 
 # Architecture
 
-SIP Protocol operates as an application layer between user applications and the NEAR Intents settlement system.
+SIP Protocol operates as an application layer between user applications and the underlying settlement systems.
+
+:::note
+The architecture below describes the cross-chain flow via NEAR Intents. SIP also supports **same-chain privacy**: Solana and NEAR same-chain are live (M17, mainnet), and EVM same-chain is in progress (M18).
+:::
 
 ## System Overview
 
@@ -113,7 +117,10 @@ ZK proof generation interfaces:
 | Provider | Status | Use Case |
 |----------|--------|----------|
 | `MockProofProvider` | Available | Testing, development |
-| `NoirProofProvider` | Planned | Production |
+| `NoirProofProvider` | Available | Production (Node.js) — subpath import `@sip-protocol/sdk/proofs/noir` |
+| `BrowserNoirProvider` | Available | Production (browser proving) — `@sip-protocol/sdk/browser` |
+
+An on-chain UltraHonk verifier (`HonkVerifier`) is deployed for EVM verification (Sepolia and Arbitrum Sepolia).
 
 ## Data Flow
 

@@ -12,6 +12,10 @@ description: Internal security review report for SIP Protocol SDK v0.1.0
 
 ---
 
+:::note[Point-in-time snapshot]
+This report is a historical snapshot captured against **SDK v0.1.0** (November 2025). Metrics such as dependency versions, test counts, and open recommendations reflect that release. Several recommendations below have since been addressed (e.g. memory zeroization is now implemented via `secure-memory.ts`). For the current SDK (v0.9.0), see the live source and the [Audit Preparation](/security/audit-preparation/) and [Audit Scope](/security/audit-scope/) documents.
+:::
+
 ## Executive Summary
 
 The SIP Protocol SDK demonstrates strong security practices across cryptographic implementation, input validation, and error handling. The codebase uses industry-standard audited libraries (@noble/*) and follows best practices for privacy-preserving protocols.
@@ -77,7 +81,7 @@ All cryptographic operations use @noble/hashes/utils randomBytes (CSPRNG)
 1. **Dependencies**: Uses @noble/* libraries (audited, constant-time)
    - @noble/curves v1.3.0 - secp256k1 operations
    - @noble/hashes v1.3.3 - SHA256, HKDF
-   - @noble/ciphers v2.0.1 - XChaCha20-Poly1305
+   - @noble/ciphers v2.2.0 - XChaCha20-Poly1305
 
 2. **Random Number Generation**: All crypto operations use `randomBytes` from @noble/hashes
    - stealth.ts:58-59 - Key generation

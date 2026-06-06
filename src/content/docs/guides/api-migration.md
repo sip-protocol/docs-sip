@@ -5,15 +5,17 @@ description: Migrate from deprecated APIs to their replacements
 
 # API Migration Guide
 
-This guide helps you migrate code that uses deprecated methods before they are removed in v0.2.0.
+This guide helps you migrate code that uses deprecated methods before they are removed.
+
+The current SDK release is **`@sip-protocol/sdk` v0.9.0**. The methods below still ship in v0.9.0 for backward compatibility, but they emit a runtime deprecation warning and are scheduled for removal in a future major release (the original removal target was 2026-06-01). Migrate now to avoid a breaking change later.
 
 ## Overview
 
-| Deprecated Method | Replacement | Removal Version |
-|-------------------|-------------|-----------------|
-| `createCommitment()` | `commit()` | v0.2.0 |
-| `verifyCommitment()` | `verifyOpening()` | v0.2.0 |
-| `generateShieldedAddress()` | `createAccount()` + `getAddressForAccount()` | v0.2.0 |
+| Deprecated Method | Replacement | Status |
+|-------------------|-------------|--------|
+| `createCommitment()` | `commit()` | Deprecated — slated for removal |
+| `verifyCommitment()` | `verifyOpening()` | Deprecated — slated for removal |
+| `generateShieldedAddress()` | `createAccount()` + `getAddressForAccount()` | Deprecated — slated for removal |
 
 ## Pedersen Commitments
 
@@ -161,17 +163,17 @@ pnpm typecheck
 
 ## Deprecation Timeline
 
-### v0.1.x (Current)
-- Deprecated methods work with console warnings
+### v0.9.0 (Current)
+- Deprecated methods still work, but emit a one-time runtime deprecation warning
 - New methods available
 - Both APIs supported
 
-### v0.2.0 (Planned)
-- Deprecated methods removed
+### Future major release
+- Deprecated methods removed (original removal target: 2026-06-01)
 - Only new APIs supported
 - **Breaking change**
 
-**Action Required:** Migrate before upgrading to v0.2.0
+**Action Required:** Migrate before the next major SDK release
 
 ## Need Help?
 

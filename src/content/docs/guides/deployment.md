@@ -16,9 +16,11 @@ SIP Protocol uses multiple repositories:
 | Repository | Purpose | Deployment |
 |------------|---------|------------|
 | `sip-protocol/sip-protocol` | Core SDK + Types | npm registry |
-| `sip-protocol/sip-website` | Marketing website | VPS (Docker) |
+| `sip-protocol/sip-website` | Marketing website | Vercel (Git auto-deploy) |
 | `sip-protocol/sip-app` | Privacy applications | VPS (Docker) |
-| `sip-protocol/docs-sip` | Documentation | VPS (Docker) |
+| `sip-protocol/docs-sip` | Documentation | Vercel (Git auto-deploy) |
+| `sip-protocol/blog-sip` | Blog | Vercel (Git auto-deploy) |
+| `sip-protocol/cdn-sip` | CDN assets | Vercel (Git auto-deploy) |
 
 **Privacy App:** The interactive application lives at [sip-protocol/sip-app](https://github.com/sip-protocol/sip-app) and is deployed to `app.sip-protocol.org`.
 
@@ -123,11 +125,17 @@ The demo application and marketing website are in a separate repository:
 
 **Repository:** [sip-protocol/sip-website](https://github.com/sip-protocol/sip-website)
 
-**Deployment:** VPS with Docker (blue-green deployment)
-- **Production:** sip-protocol.org (ports 5000/5001)
-- **Staging:** staging.sip-protocol.org (port 5002)
+**Deployment:** Vercel (Git-integration auto-deploy)
+- **Production:** sip-protocol.org
 
-**Architecture:**
+The marketing website migrated from the VPS to Vercel in June 2026, alongside the docs, blog, and CDN. The `sip-app` privacy application remains on the VPS (Docker).
+
+**Architecture (Vercel — docs, blog, cdn, sip-website):**
+```
+GitHub Push (main) → Vercel Git integration → build → deploy
+```
+
+**Architecture (VPS — sip-app):**
 ```
 GitHub Push → GitHub Actions → GHCR → SSH Deploy → Docker Compose
 ```
@@ -172,4 +180,4 @@ Before publishing a release:
 
 ---
 
-**Last Updated:** November 27, 2025
+**Last Updated:** June 6, 2026

@@ -105,7 +105,7 @@ A detailed comparison of SIP Protocol with other blockchain privacy solutions.
 | **Integration** | SDK for any app | Requires Zcash wallet/node |
 | **Chains** | Multi-chain | Zcash only |
 | **Swaps** | Native cross-chain | Requires bridges |
-| **Privacy strength** | Strong (secp256k1 + commitments) | Very strong (Groth16 proofs) |
+| **Privacy strength** | Strong (secp256k1 + commitments) | Very strong (Groth16 (Sapling) / Halo 2 (Orchard)) |
 | **Viewing keys** | Hierarchical | Flat (per-address) |
 | **Compliance** | Built-in | Manual key sharing |
 | **Developer experience** | TypeScript SDK | C++/Rust libraries |

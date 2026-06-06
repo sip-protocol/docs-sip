@@ -6,7 +6,7 @@ description: Scope document for external security audits of SIP Protocol
 # Security Audit Scope Document
 
 **Project:** SIP Protocol (Shielded Intents Protocol)
-**Version:** 0.1.0
+**Audit Target Version:** SDK 0.1.0 baseline (current released SDK: 0.9.0)
 **Date:** November 28, 2025
 **Status:** Ready for External Audit
 
@@ -76,7 +76,7 @@ SIP Protocol is a privacy layer for cross-chain transactions built on NEAR Inten
 |------|-------|-------------|------|
 | `packages/sdk/src/proofs/interface.ts` | ~200 | Proof provider interface | Medium |
 | `packages/sdk/src/proofs/mock.ts` | ~280 | Mock provider (dev only) | Low |
-| `packages/sdk/src/proofs/noir.ts` | ~450 | Noir proof provider (real ZK) | High |
+| `packages/sdk/src/proofs/noir.ts` | ~1,213 | Noir proof provider (real ZK) | High |
 
 **Focus Areas:**
 - Interface correctness for future Noir integration
@@ -117,10 +117,10 @@ SIP Protocol is a privacy layer for cross-chain transactions built on NEAR Inten
 Core Cryptography:     ~1,420 lines (+secure-memory.ts)
 Validation/Errors:       ~870 lines
 Intent System:           ~720 lines
-Proof System:            ~930 lines (+noir.ts)
+Proof System:          ~1,693 lines (+noir.ts ~1,213)
 Integrations:          ~1,530 lines
 ─────────────────────────────────
-Total In-Scope:        ~5,470 lines
+Total In-Scope:        ~6,233 lines
 ```
 
 ### Test Coverage
@@ -145,7 +145,7 @@ Core Files:
 |------------|---------|---------|--------------|
 | @noble/curves | ^1.3.0 | secp256k1 ECC | Trail of Bits |
 | @noble/hashes | ^1.3.3 | SHA256, HKDF | Trail of Bits |
-| @noble/ciphers | ^2.0.1 | XChaCha20-Poly1305 | Trail of Bits |
+| @noble/ciphers | ^2.2.0 | XChaCha20-Poly1305 | Trail of Bits |
 
 ---
 
