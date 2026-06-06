@@ -8,12 +8,17 @@ import { Badge, Card } from '@astrojs/starlight/components'
 <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
   <Badge text="Planned" variant="caution" />
   <Badge text="Noir" variant="note" />
-  <Badge text="~150 constraints" variant="tip" />
+  <Badge text="1,113 ACIR opcodes" variant="tip" />
+  <Badge text="6 tests" variant="tip" />
 </div>
 
 <Card title="TL;DR">
 Proves an intent was authorized by a legitimate sender **without revealing their identity**. Uses ECDSA signature verification inside the circuit to prove "someone with spending authority signed this."
 </Card>
+
+:::note[Circuit metric: ACIR opcodes vs gate count]
+The **1,113** figure is the **ACIR opcode** count reported by `nargo info` for the compiled circuit — not a Barretenberg gate count. After Noir lowers ACIR to the UltraHonk proving system (Barretenberg / `@aztec/bb.js`), the backend gate count is larger and backend-specific.
+:::
 
 # Validity Proof Specification
 
@@ -184,5 +189,9 @@ interface ValidityProof {
 | Metric | Mock | Noir (estimated) |
 |--------|------|------------------|
 | Proof generation | <1ms | 3-5s |
-| Proof size | 64 bytes | ~250 bytes |
+| Proof size | placeholder bytes (not a real proof) | multi-KB (real UltraHonk proof) |
 | Verification | <1ms | ~15ms |
+
+:::caution[Proof size]
+`MockProofProvider` returns placeholder bytes for testing — it is **not** a real cryptographic proof and has no fixed 64-byte size. Real proofs are produced by the UltraHonk backend (Barretenberg / `@aztec/bb.js`) and are several KB, not ~250 bytes.
+:::

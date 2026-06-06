@@ -95,7 +95,7 @@ const bytes = crypto.getRandomValues(new Uint8Array(32))
 - [ ] No discrete log relation to G is known
 
 ```typescript
-// Expected: H = hashToCurve("SIP_PEDERSEN_H_GENERATOR_V1")
+// Expected: H = try-and-increment over SHA-256("SIP-PEDERSEN-GENERATOR-H-v1:<counter>")
 ```
 
 #### 2.2 Commitment Creation
@@ -133,9 +133,9 @@ const bytes = crypto.getRandomValues(new Uint8Array(32))
 
 - [ ] **File**: `stealth.ts:generateStealthAddress()`
 - [ ] Ephemeral key is fresh random
-- [ ] ECDH performed correctly: S = r·K_view
+- [ ] ECDH performed correctly: S = r·K_spend
 - [ ] Scalar derivation: s = H(S)
-- [ ] Address computation: P = K_spend + s·G
+- [ ] Address computation: P = K_view + s·G
 
 #### 3.3 Address Checking
 
@@ -147,7 +147,7 @@ const bytes = crypto.getRandomValues(new Uint8Array(32))
 #### 3.4 Private Key Recovery
 
 - [ ] **File**: `stealth.ts:deriveStealthPrivateKey()`
-- [ ] Correctly computes: p = k_spend + H(k_view·R)
+- [ ] Correctly computes: p = k_view + H(k_spend·R)
 - [ ] Result matches stealth address public key
 - [ ] No timing variance based on input
 

@@ -5,6 +5,10 @@ description: Design document for integrating NEAR 1Click API with SIP Protocol S
 
 # NEAR Intents Integration Design
 
+:::note[Design proposal — not the shipped API]
+This document describes a proposed high-level API design. The shipped SDK exposes the `SIP` client (`getQuotes()` / `execute()`) and `NEARIntentsAdapter` (`prepareSwap()` / `initiateSwap()`) — see [NEAR Intents](/integrations/near-intents/). Code below is illustrative of the design direction, not current API.
+:::
+
 Design document for integrating NEAR 1Click API with SIP Protocol SDK.
 
 ## Goals

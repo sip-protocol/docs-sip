@@ -66,9 +66,13 @@ Where:
 ### H Generator (NUMS Construction)
 
 ```typescript
-// H is derived by hashing a fixed string to curve
-const seed = sha256("SIP_PEDERSEN_H_GENERATOR_V1")
-H = hashToCurve(seed)
+// H is derived deterministically from a fixed domain string using a
+// try-and-increment hash-to-curve, so nobody knows log_G(H).
+const H_DOMAIN = 'SIP-PEDERSEN-GENERATOR-H-v1'
+// For counter = 0, 1, 2, ...: hash `${H_DOMAIN}:${counter}` with SHA-256
+// and attempt to decode the digest as a valid curve point; the first
+// success becomes H.
+H = tryAndIncrement(H_DOMAIN)
 
 // Properties:
 // 1. Nobody knows discrete log of H with respect to G
@@ -108,14 +112,21 @@ H = hashToCurve(seed)
 Recipient publishes: (K_spend, K_view) - stealth meta-address
 Sender generates:    r (ephemeral private key)
                      R = r·G (ephemeral public key)
-                     S = r·K_view (shared secret via ECDH)
+                     S = r·K_spend (shared secret via ECDH)
                      s = H(S) (scalar derivation)
-                     P = K_spend + s·G (stealth address)
+                     P = K_view + s·G (stealth address)
 
-Recipient computes:  S' = k_view·R (same shared secret)
+Recipient computes:  S' = k_spend·R (same shared secret)
                      s' = H(S')
-                     p = k_spend + s' (stealth private key)
+                     p = k_view + s' (stealth private key)
 ```
+
+Consistency: `S = r·K_spend = k_spend·R` (ECDH), and
+`P = K_view + s·G = (k_view + s)·G = p·G`. Deriving the stealth private key
+`p` therefore requires **both** recipient private keys (`k_spend` to recover
+`S`, `k_view` as the base scalar). This matches the implementation in
+`stealth/secp256k1.ts` and the formula `A = Q + H(r·P)·G` in
+[security-properties](/security/security-properties/).
 
 ### Security Properties
 
@@ -174,7 +185,7 @@ Properties:
 
 - **Backend**: Barretenberg (Aztec)
 - **Language**: Noir
-- **Proof System**: UltraPlonk
+- **Proof System**: UltraHonk
 
 ### Assumptions
 
@@ -192,11 +203,14 @@ Properties:
 
 ### Circuit Constraints
 
-| Circuit | Constraints (approx) | Purpose |
-|---------|---------------------|---------|
-| Funding Proof | ~20 | Prove sufficient balance |
-| Validity Proof | ~200 | Verify intent signature |
-| Fulfillment Proof | ~200 | Verify delivery |
+| Circuit | ACIR Opcodes | Tests | Purpose |
+|---------|-------------|-------|---------|
+| Funding Proof | 972 | 5 | Prove balance ≥ minimum |
+| Validity Proof | 1,113 | 6 | Verify intent authorization |
+| Fulfillment Proof | 1,691 | 8 | Verify fulfillment correctness |
+
+> Counts are ACIR opcodes from the compiled Noir circuits (3,776 total). The
+> Barretenberg gate count after lowering is higher and differs per backend.
 
 ## Random Number Generation
 
@@ -234,7 +248,7 @@ crypto.getRandomValues(new Uint8Array(32))
 | Commitments | ∞ (perfect) | Hiding is information-theoretic |
 | Stealth addresses | 128 bits | CDH assumption |
 | SHA-256 | 128 bits | Collision resistance |
-| ZK Proofs | ~128 bits | UltraPlonk soundness |
+| ZK Proofs | ~128 bits | UltraHonk soundness |
 
 ## Implementation Notes
 

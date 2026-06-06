@@ -160,15 +160,13 @@ flowchart TB
         NoirJS["Noir / NoirJS<br/>(Production)"]
     end
 
-    NoirJS --> UP["UltraPlonk Backend"]
-    NoirJS --> G16["Groth16 Backend"]
+    NoirJS --> UH["UltraHonk Backend<br/>(Barretenberg / @aztec/bb.js)"]
 
     style SDK fill:#312e81,stroke:#8b5cf6,stroke-width:2px
     style PP fill:#4c1d95,stroke:#a78bfa
     style TestPath fill:#1e1b4b,stroke:#8b5cf6
     style ProdPath fill:#4c1d95,stroke:#a78bfa,stroke-width:2px
-    style UP fill:#22c55e,stroke:#86efac
-    style G16 fill:#22c55e,stroke:#86efac
+    style UH fill:#22c55e,stroke:#86efac
 ```
 
 ## SDK Integration
@@ -264,7 +262,7 @@ const proof = await prover.prove({
 | Risk | Mitigation |
 |------|------------|
 | Less battle-tested | Simple circuits, formal verification |
-| Performance gaps | Start with UltraPlonk, can switch |
+| Performance gaps | Start with UltraHonk (Barretenberg), can switch |
 | Smaller ecosystem | Core primitives well-supported |
 
 ## Roadmap
