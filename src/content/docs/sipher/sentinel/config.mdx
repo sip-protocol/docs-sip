@@ -6,7 +6,7 @@ description: 15 environment variables that tune SENTINEL — modes, scanner inte
 import { Aside } from '@astrojs/starlight/components'
 
 <Aside type="note" title="Source of truth">
-This page mirrors [`docs/sentinel/config.md`](https://github.com/sip-protocol/sipher/blob/main/docs/sentinel/config.md) in the [sipher repo](https://github.com/sip-protocol/sipher). For the latest, always check the source. Last synced: **2026-05-04**.
+This page mirrors [`docs/sentinel/config.md`](https://github.com/sip-protocol/sipher/blob/main/docs/sentinel/config.md) in the [sipher repo](https://github.com/sip-protocol/sipher). For the latest, always check the source. Last synced: **2026-06-06**.
 </Aside>
 
 All SENTINEL behavior is tuned via environment variables. Read at startup by `getSentinelConfig` in [`packages/agent/src/sentinel/config.ts`](https://github.com/sip-protocol/sipher/blob/main/packages/agent/src/sentinel/config.ts). Defaults shown below are verified against that file as of the `Last verified` date.
@@ -25,7 +25,7 @@ Boolean env vars use string parsing and polarity matters:
 
 | Var | Type | Default | Valid values | What it tunes |
 |---|---|---|---|---|
-| `SENTINEL_MODE` | enum | `yolo` | `yolo` \| `advisory` \| `off` | Whether SENTINEL blocks (`block` decisions only in `yolo`), also pauses for `flag` in `advisory`, or skips all assessments entirely in `off`. See [README operating modes](./README.md#operating-modes). |
+| `SENTINEL_MODE` | enum | `yolo` | `yolo` \| `advisory` \| `off` | How SENTINEL acts on its verdict. A `block` verdict rejects the action in **all** modes. `yolo` auto-executes non-blocked (`warn`/`allow`) actions and lets SENTINEL run its own fund-moving tools; `advisory` never moves funds — it pauses flagged actions for human review and only analyzes/alerts; `off` skips assessment entirely. See [operating modes](/sipher/sentinel/overview/#operating-modes). |
 | `SENTINEL_PREFLIGHT_SCOPE` | enum | `fund-actions` | `fund-actions` \| `critical-only` \| `never` | Which agent tools trigger a pre-execution risk check. `fund-actions` covers all fund-moving tools; `critical-only` restricts to the highest-risk subset; `never` disables preflight entirely. |
 | `SENTINEL_PREFLIGHT_SKIP_AMOUNT` | number (SOL) | `0.1` | any non-negative | Skip preflight when the action amount is below this threshold. Reduces LLM calls for small routine transfers. |
 

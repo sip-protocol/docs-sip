@@ -1,12 +1,12 @@
 ---
 title: SENTINEL REST API
-description: All 10 SENTINEL endpoints under /api/sentinel — public + admin — with auth, error envelope, request/response shapes, and verified curl examples.
+description: All 11 SENTINEL endpoints under /api/sentinel — public + admin — with auth, error envelope, request/response shapes, and verified curl examples.
 ---
 
 import { Aside } from '@astrojs/starlight/components'
 
 <Aside type="note" title="Source of truth">
-This page mirrors [`docs/sentinel/rest-api.md`](https://github.com/sip-protocol/sipher/blob/main/docs/sentinel/rest-api.md) in the [sipher repo](https://github.com/sip-protocol/sipher). For the latest, always check the source. Last synced: **2026-05-04**.
+This page mirrors [`docs/sentinel/rest-api.md`](https://github.com/sip-protocol/sipher/blob/main/docs/sentinel/rest-api.md) in the [sipher repo](https://github.com/sip-protocol/sipher). For the latest, always check the source. Last synced: **2026-06-06**.
 </Aside>
 
 All endpoints live under `/api/sentinel`. JWT-based auth via `Authorization: Bearer <token>`.
@@ -137,7 +137,7 @@ curl -X POST http://localhost:5006/api/sentinel/assess \
 ```
 
 :::note
-The captured response shows an empty array — this is a fresh local DB with no blacklist entries. In production the array contains objects with fields: `id`, `address`, `reason`, `severity`, `added_by`, `added_at`, `expires_at`, `source_event_id`. Schema detail in [`docs/sentinel/audit-log.md`](/sipher/sentinel/audit-log/).
+The captured response shows an empty array — this is a fresh local DB with no blacklist entries. In production the array contains objects with fields: `id`, `address`, `reason`, `severity`, `added_by`, `added_at`, `expires_at`, `source_event_id`. Schema detail in the [audit log](/sipher/sentinel/audit-log/).
 :::
 
 **Example:**
@@ -160,7 +160,7 @@ curl -H "Authorization: Bearer $JWT" \
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `wallet` | string | — | Filter by originating wallet address |
-| `status` | string | — | Filter by action status (e.g., `pending`, `cancelled`, `approved`) |
+| `status` | string | — | Filter by action status — lifecycle is `pending` → `executing` → `executed` \| `cancelled` |
 
 **Response 200:**
 
@@ -171,7 +171,7 @@ curl -H "Authorization: Bearer $JWT" \
 ```
 
 :::note
-The captured response shows an empty array — fresh local DB. In production the array contains objects with fields: `id`, `tool`, `args`, `wallet`, `status`, `reason`, `created_at`, `resolved_at`. Schema detail in [`docs/sentinel/audit-log.md`](/sipher/sentinel/audit-log/).
+The captured response shows an empty array — fresh local DB. In production the array contains objects with fields: `id`, `tool`, `args`, `wallet`, `status`, `reason`, `created_at`, `resolved_at`. Schema detail in the [audit log](/sipher/sentinel/audit-log/).
 :::
 
 **Example:**
@@ -343,7 +343,7 @@ Returned when the action ID exists and was cancelled.
 { "error": { "code": "NOT_FOUND", "message": "pending action not found or already resolved" } }
 ```
 
-Returned when the action ID does not exist or is already settled. (Behavior changed in this PR — previously this path returned `200 + {success: false}`.)
+Returned when the action ID does not exist or is already settled. A missing or already-resolved action returns this `404` envelope (not `200 + {success: false}`).
 
 **Example:**
 
@@ -378,7 +378,7 @@ curl -X POST http://localhost:5006/api/sentinel/circuit-breaker/01KQP25BM8RVZJ92
 ```
 
 :::note
-The captured response shows an empty array — fresh local DB. In production each decision object contains: `id` (ULID), `action`, `wallet`, `risk`, `score`, `recommendation`, `reasons` (JSON array), `source`, `cost_usd`, `duration_ms`, `created_at`. Schema detail in [`docs/sentinel/audit-log.md`](/sipher/sentinel/audit-log/).
+The captured response shows an empty array — fresh local DB. In production each decision object contains: `id` (ULID), `action`, `wallet`, `risk`, `score`, `recommendation`, `reasons` (JSON array), `source`, `cost_usd`, `duration_ms`, `created_at`. Schema detail in the [audit log](/sipher/sentinel/audit-log/).
 :::
 
 **Example:**
@@ -386,6 +386,40 @@ The captured response shows an empty array — fresh local DB. In production eac
 ```bash
 curl -H "Authorization: Bearer $JWT" \
   "http://localhost:5006/api/sentinel/decisions?limit=20&source=agent"
+```
+
+---
+
+### GET /api/sentinel/config
+
+**Auth:** `verifyJwt + requireOwner`
+
+**Description:** Return the current SENTINEL configuration snapshot — operating `mode`, preflight scope/thresholds, `blacklistAutonomy`, rate limits, scan intervals, `autoRefundThreshold`, `model`, `dailyBudgetUsd`, accrued `dailyCostUsd`, `blockOnError`, and the `fundMovingTools` list. See [Configuration](/sipher/sentinel/config/) for what each field controls.
+
+**Response 200:**
+
+```json
+{
+  "mode": "advisory",
+  "preflightScope": "fund-moving",
+  "blacklistAutonomy": true,
+  "model": "openrouter:anthropic/claude-sonnet-4.6",
+  "dailyBudgetUsd": 10,
+  "dailyCostUsd": 0,
+  "blockOnError": false,
+  "fundMovingTools": ["executeRefund", "addToBlacklist"]
+}
+```
+
+:::note
+Response includes the full config (mode, preflight scope/skip-amount, large-transfer threshold, threat-check flag, cancel window, per-hour rate limits, scan intervals, auto-refund threshold, model, daily budget/cost, block-on-error). The example is abbreviated.
+:::
+
+**Example:**
+
+```bash
+curl -H "Authorization: Bearer $JWT" \
+  http://localhost:5006/api/sentinel/config
 ```
 
 ---
