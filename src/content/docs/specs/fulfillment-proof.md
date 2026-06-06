@@ -8,12 +8,17 @@ import { Badge, Card } from '@astrojs/starlight/components'
 <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
   <Badge text="Planned" variant="caution" />
   <Badge text="Noir" variant="note" />
-  <Badge text="~80 constraints" variant="tip" />
+  <Badge text="1,691 ACIR opcodes" variant="tip" />
+  <Badge text="8 tests" variant="tip" />
 </div>
 
 <Card title="TL;DR">
 Proves a solver correctly executed a swap **without revealing the exact amount or transaction path**. Verifies delivery to the correct stealth address and that output meets minimum requirements.
 </Card>
+
+:::note[Circuit metric: ACIR opcodes vs gate count]
+The **1,691** figure is the **ACIR opcode** count reported by `nargo info` for the compiled circuit — not a Barretenberg gate count. After Noir lowers ACIR to the UltraHonk proving system (Barretenberg / `@aztec/bb.js`), the backend gate count is larger and backend-specific.
+:::
 
 # Fulfillment Proof Specification
 
@@ -201,5 +206,9 @@ interface OracleAttestation {
 | Metric | Mock | Noir (estimated) |
 |--------|------|------------------|
 | Proof generation | <1ms | 2-4s |
-| Proof size | 64 bytes | ~200 bytes |
+| Proof size | placeholder bytes (not a real proof) | multi-KB (real UltraHonk proof) |
 | Verification | <1ms | ~10ms |
+
+:::caution[Proof size]
+`MockProofProvider` returns placeholder bytes for testing — it is **not** a real cryptographic proof and has no fixed 64-byte size. Real proofs are produced by the UltraHonk backend (Barretenberg / `@aztec/bb.js`) and are several KB, not ~200 bytes.
+:::
