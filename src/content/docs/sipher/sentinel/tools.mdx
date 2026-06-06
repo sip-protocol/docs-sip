@@ -6,7 +6,7 @@ description: 14 SENTINEL tools (7 read + 7 action) plus the assessRisk tool — 
 import { Aside } from '@astrojs/starlight/components'
 
 <Aside type="note" title="Source of truth">
-This page mirrors [`docs/sentinel/tools.md`](https://github.com/sip-protocol/sipher/blob/main/docs/sentinel/tools.md) in the [sipher repo](https://github.com/sip-protocol/sipher). For the latest, always check the source. Last synced: **2026-05-04**.
+This page mirrors [`docs/sentinel/tools.md`](https://github.com/sip-protocol/sipher/blob/main/docs/sentinel/tools.md) in the [sipher repo](https://github.com/sip-protocol/sipher). For the latest, always check the source. Last synced: **2026-06-06**.
 </Aside>
 
 Tools that SENTINEL's LLM agent (`SentinelCore`) calls during risk assessment, plus the `assessRisk` tool exposed to the conversational SIPHER agent.
@@ -14,7 +14,7 @@ Tools that SENTINEL's LLM agent (`SentinelCore`) calls during risk assessment, p
 Tools fall into two categories:
 
 - **Read tools (7):** Pure RPC/DB/cache reads, no on-chain or DB mutations. Safe in any `SENTINEL_MODE`.
-- **Action tools (7):** Mutate state (DB writes, on-chain transactions, alerts to user). Subject to autonomy thresholds — see [config.md](/sipher/sentinel/config/#autonomy).
+- **Action tools (7):** Mutate state (DB writes, on-chain transactions, alerts to user). Subject to autonomy thresholds — see [Configuration](/sipher/sentinel/config/#autonomy).
 
 Plus `assessRisk`, which is _not_ a SentinelCore tool — it is the SIPHER conversational tool that invokes SENTINEL's `/assess` flow.
 
@@ -234,7 +234,7 @@ Action tools mutate state. SentinelCore's system prompt and `SentinelAdapter` en
 - Calls `insertBlacklist({ ...params, addedBy: 'sentinel' })` — inserts into `sentinel_blacklist`.
 - Emits `sentinel:blacklist-added` on `guardianBus`.
 
-**Autonomy:** Gated by `SENTINEL_BLACKLIST_AUTONOMY` (default `false` — off unless explicitly enabled) and `SENTINEL_RATE_LIMIT_BLACKLIST_PER_HOUR`.
+**Autonomy:** Gated by `SENTINEL_BLACKLIST_AUTONOMY` (default `true` — on unless `SENTINEL_BLACKLIST_AUTONOMY=false`) and `SENTINEL_RATE_LIMIT_BLACKLIST_PER_HOUR`.
 
 **When fired:** When SENTINEL identifies a high-confidence threat — e.g., mixer interaction, known scam address, or repeated `block` decisions — and `blacklistAutonomy` is enabled. In `advisory` mode the system prompt's principle _"Never take fund-moving actions in advisory mode"_ applies; the LLM should call `alertUser` instead.
 
