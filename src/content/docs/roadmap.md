@@ -17,10 +17,10 @@ a16z's December 2025 thesis validates SIP's core positioning as privacy middlewa
 ## Current Status
 
 - **Phase**: 3 of 5 Complete (Foundation → Standard → Ecosystem → Same-Chain → Moat)
-- **Progress**: M16 Complete, M17 Active
+- **Progress**: M17 Complete, M18 In Progress
 - **SDK Version**: ![npm version](https://img.shields.io/npm/v/@sip-protocol/sdk)
 - **Build Status**: ![CI](https://github.com/sip-protocol/sip-protocol/actions/workflows/ci.yml/badge.svg)
-- **Test Coverage**: 6,850+ tests passing
+- **Test Coverage**: 7,624+ tests passing
 - **Packages**: 7 (@sip-protocol/sdk, types, react, react-native, cli, api + website)
 - **Chains**: 15+ supported
 - **Live**: [sip-protocol.org](https://sip-protocol.org)
@@ -73,9 +73,9 @@ Capture the same-chain privacy market — 10-20x bigger than cross-chain only.
 
 | Milestone | Focus | Status |
 |-----------|-------|--------|
-| M16 | Narrative Capture & Positioning | 🎯 Starting |
-| M17 | Solana Same-Chain Privacy (Anchor) | 🔲 Planned |
-| M18 | Ethereum Same-Chain Privacy (Solidity) | 🔲 Planned |
+| M16 | Narrative Capture & Positioning | ✅ |
+| M17 | Solana Same-Chain Privacy (Anchor) | ✅ (mainnet live) |
+| M18 | Ethereum Same-Chain Privacy (Solidity) | 🔄 In Progress |
 
 **Strategic context**: PrivacyCash (pool-based mixer) is gaining traction on Solana. SIP's cryptographic approach (Pedersen commitments + stealth addresses) is architecturally superior with compliance-ready viewing keys.
 
@@ -111,8 +111,8 @@ For detailed milestone tracking with GitHub issues, see the [full roadmap on the
 
 We welcome contributions! Current focus areas:
 
-- **M16**: Narrative capture and competitive positioning
-- **M17**: Solana same-chain privacy module
+- **M18**: Ethereum same-chain privacy (Solidity contracts, L2 support)
+- **M19**: Proof composition research (Mina, Halo2)
 - **Security**: External audit preparation
 - **Adoption**: Community feedback and integration support
 

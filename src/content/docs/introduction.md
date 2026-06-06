@@ -82,6 +82,7 @@ SIP operates as an **application layer** atop existing infrastructure:
 
 - **No protocol changes required** to underlying blockchains
 - **Integrates with NEAR Intents** settlement system
+- **Cross-chain and same-chain** — same-chain privacy on Solana and NEAR is live (mainnet), with EVM same-chain in progress
 - **Compatible with existing wallets** via wallet adapters
 - **Sub-30ms overhead** for privacy operations
 

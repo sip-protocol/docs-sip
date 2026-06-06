@@ -37,8 +37,8 @@ packages/
 
 | Dependency | Version | Purpose | Audit Status |
 |------------|---------|---------|--------------|
-| @noble/curves | ^1.2.0 | ECC operations | Audited (Trail of Bits) |
-| @noble/hashes | ^1.3.2 | Hash functions | Audited (Trail of Bits) |
+| @noble/curves | ^1.3.0 | ECC operations | Audited (Trail of Bits) |
+| @noble/hashes | ^1.3.3 | Hash functions | Audited (Trail of Bits) |
 | Noir | 1.0.0-beta.15 | ZK circuits | Aztec-maintained |
 
 ### Entry Points

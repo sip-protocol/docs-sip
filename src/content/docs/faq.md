@@ -286,7 +286,7 @@ Use these for development:
 Not yet. We are actively preparing for audit:
 
 - Internal review complete
-- ![CI](https://github.com/sip-protocol/sip-protocol/actions/workflows/ci.yml/badge.svg) Comprehensive test coverage
+- Comprehensive test coverage
 - Threat model documented
 - Seeking qualified auditors
 
@@ -353,4 +353,4 @@ SIP is seeking grants from multiple foundations:
 
 - **Documentation**: [docs.sip-protocol.org](https://docs.sip-protocol.org)
 - **GitHub Issues**: [github.com/sip-protocol/sip-protocol/issues](https://github.com/sip-protocol/sip-protocol/issues)
-- **Twitter/X**: [@rz1989sol](https://x.com/rz1989sol)
+- **Twitter/X**: [@sipprotocol](https://x.com/sipprotocol)
