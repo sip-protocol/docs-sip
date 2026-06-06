@@ -342,7 +342,7 @@ class StealthWallet {
 }
 
 // Example usage
-async function demonstrateStealth Scanner() {
+async function demonstrateStealthScanner() {
   // Create wallet
   const wallet = new StealthWallet('ethereum', 'my-wallet')
   console.log('Receiving address:', wallet.getReceivingAddress())
@@ -369,7 +369,7 @@ async function demonstrateStealth Scanner() {
   console.log(`\nFinal balance: ${wallet.getBalance()}`)
 }
 
-demonstrateStealth Scanner()
+demonstrateStealthScanner()
 ```
 
 ## Common Pitfalls
@@ -424,7 +424,7 @@ for (const addr of allAddresses) {
 ```typescript
 // ❌ Wrong - scanning from genesis every time
 async function scan() {
-  const addresses = await getStealthAddresses FromBlock(0)
+  const addresses = await getStealthAddressesFromBlock(0)
   // Scans everything every time
 }
 ```

@@ -57,9 +57,10 @@ SIP includes Zcash RPC client for shielded operations:
 import { ZcashRPCClient } from '@sip-protocol/sdk'
 
 const client = new ZcashRPCClient({
-  rpcUrl: 'http://localhost:8232',
-  rpcUser: 'user',
-  rpcPassword: 'password'
+  host: '127.0.0.1',
+  port: 8232,
+  username: process.env.ZCASH_RPC_USER,
+  password: process.env.ZCASH_RPC_PASS
 })
 
 // Create HD account
@@ -71,13 +72,13 @@ const { address } = await client.getAddressForAccount(
   ['sapling', 'orchard']
 )
 
-// Send shielded transaction
-const txid = await client.sendShielded({
-  from: zAddress,
-  to: recipientZAddress,
-  amount: 1.5,
-  memo: 'Private transfer'
+// Send shielded transaction (returns an operation ID for tracking)
+const operationId = await client.sendShielded({
+  fromAddress: address,
+  recipients: [{ address: recipientZAddress, amount: 1.5, memo: 'Private transfer' }]
 })
+const operation = await client.waitForOperation(operationId)
+console.log('Transaction ID:', operation.result?.txid)
 ```
 
 ### Option 3: Proof Verification
@@ -155,20 +156,27 @@ const { address } = await client.getAddressForAccount(
 ### Shielded Transactions
 
 ```typescript
-// Get balance
-const balance = await client.getShieldedBalance(address)
+// Get balance for an account (per-pool breakdown)
+const balance = await client.getAccountBalance(account)
 
-// List transactions
-const txs = await client.listShieldedTransactions(address)
+// List unspent shielded notes (incoming/received funds)
+const notes = await client.listUnspent()
 
-// Send shielded
-const txid = await client.sendShielded({
-  from: sender,
-  to: recipient,
-  amount: 10,
-  memo: 'Optional memo'
+// Send shielded (returns an operation ID; resolve to a txid via waitForOperation)
+const operationId = await client.sendShielded({
+  fromAddress: sender,
+  recipients: [{ address: recipient, amount: 10, memo: 'Optional memo' }]
 })
+const { result } = await client.waitForOperation(operationId)
+console.log('txid:', result?.txid)
 ```
+
+:::note
+`ZcashRPCClient` has no `getShieldedBalance` or `listShieldedTransactions`
+methods — use `getAccountBalance(account)` and `listUnspent()`. For a
+higher-level API (`getBalance()`, `getReceivedNotes()`), see
+`ZcashShieldedService`.
+:::
 
 ## Unified Addresses
 

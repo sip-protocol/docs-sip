@@ -339,7 +339,7 @@ interface ProofResult {
 }
 
 interface ZKProof {
-  type: 'funding' | 'validity' | 'fulfillment'
+  type: 'funding' | 'validity' | 'fulfillment' | 'ownership'
   proof: HexString
   publicInputs: HexString[]
 }
@@ -382,8 +382,8 @@ import {
   supportsWebWorkers,
   supportsSharedArrayBuffer,
   getBrowserInfo,
-  hexToBytes,
-  bytesToHex,
+  browserHexToBytes,
+  browserBytesToHex,
 } from '@sip-protocol/sdk'
 ```
 

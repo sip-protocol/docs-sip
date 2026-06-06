@@ -136,13 +136,22 @@ import { MockProofProvider, FulfillmentProofParams } from '@sip-protocol/sdk'
 const proofProvider = new MockProofProvider()
 
 const params: FulfillmentProofParams = {
-  intentId: '0x...',
-  outputCommitment: '0x...',
-  minOutput: 100n,
-  recipientStealth: '0x...',
-  outputAmount: 105n,
-  outputBlinding: '0x...',
-  txHash: '0x...'
+  intentHash: '0x...',                  // public: hash of the original intent
+  outputAmount: 105n,                   // private: actual amount delivered
+  outputBlinding: new Uint8Array(32),   // private: output commitment blinding
+  minOutputAmount: 100n,                // public: minimum required output
+  recipientStealth: '0x...',            // public: recipient's stealth address
+  solverId: 'solver-1',                 // public: solver identifier
+  solverSecret: new Uint8Array(32),     // private: solver authorization secret
+  oracleAttestation: {                  // private: oracle attestation of delivery
+    recipient: '0x...',
+    amount: 105n,
+    txHash: '0x...',
+    blockNumber: 19000000n,
+    signature: new Uint8Array(64)
+  },
+  fulfillmentTime: Date.now(),          // public: time of fulfillment
+  expiry: Date.now() + 3_600_000        // public: intent expiry
 }
 
 const result = await proofProvider.generateFulfillmentProof(params)
@@ -170,13 +179,11 @@ For cross-chain verification, an oracle may attest to delivery:
 
 ```typescript
 interface OracleAttestation {
-  intentId: string
-  chainId: string
-  txHash: string
-  recipient: string
-  amount: bigint
-  timestamp: number
-  oracleSignature: string
+  recipient: HexString    // who received the funds
+  amount: bigint          // amount received
+  txHash: HexString       // transaction hash on the destination chain
+  blockNumber: bigint     // block containing the transaction
+  signature: Uint8Array   // oracle signature (threshold sig for multi-oracle)
 }
 ```
 

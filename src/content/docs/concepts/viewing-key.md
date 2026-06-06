@@ -116,11 +116,12 @@ Reveals ONLY the specific transaction.
 ```typescript
 import { encryptForViewing, decryptWithViewing } from '@sip-protocol/sdk'
 
+// TransactionData = { sender: string, recipient: string, amount: string, timestamp: number }
 const txData = {
   sender: '0xabc...',
   recipient: '0xdef...',
-  amount: 1000n,
-  asset: 'ETH'
+  amount: '1000',
+  timestamp: Date.now(),
 }
 
 // Encrypt for viewing key holder
@@ -132,14 +133,13 @@ const decrypted = decryptWithViewing(encrypted, viewingKey)
 
 ### Multi-Key Encryption
 
-Encrypt for multiple authorized viewers:
+`encryptForViewing` encrypts for a single `ViewingKey`. To grant access to multiple authorized viewers, encrypt the data once per key — each holder can then decrypt their own blob independently:
 
 ```typescript
-const encrypted = encryptForViewing(txData, [
-  auditorKey,
-  complianceKey,
-  taxKey
-])
+const viewers = [auditorKey, complianceKey, taxKey]
+
+const encryptedBlobs = viewers.map((key) => encryptForViewing(txData, key))
+// encryptedBlobs[0] decrypts with auditorKey, [1] with complianceKey, etc.
 ```
 
 Each key holder can decrypt independently.
@@ -150,25 +150,30 @@ A ViewingProof demonstrates that decrypted data is authentic without revealing t
 
 ```typescript
 interface ViewingProof {
-  intentHash: string
-  revealedData: TransactionData
-  commitmentProof: {
-    inputAmountProof: ZKProof
-    outputAmountProof: ZKProof
+  /** The decrypted transaction details */
+  transaction: {
+    sender: string
+    recipient: string
+    amount: string
+    timestamp: number
   }
-  viewingKeyHash: string
-  proofTimestamp: number
+  /** Proof that decryption was done correctly */
+  proof: ZKProof
 }
 ```
 
 Verifier checks:
 1. ZK proof is valid
 2. Revealed amounts match on-chain commitments
-3. Viewing key hash matches authorized viewer
+3. The proof corresponds to the authorized viewer's key
 
 ## Access Control
 
-### Key Registration
+:::note[Conceptual / roadmap]
+The grant and revocation APIs below are conceptual — they describe a planned compliance-module capability, not shipped top-level SDK exports. The current SDK does not export `ViewingKeyGrant` or a `revokeViewingKey` function. Access control today is enforced operationally: hierarchical key derivation (`deriveViewingKey`) limits scope (per-transaction TVKs reveal only one tx), and a key is "revoked" by ceasing to share it and rotating the parent. Granular, on-chain grant tracking is expected to live in the compliance module (`ComplianceManager`).
+:::
+
+### Key Registration (conceptual)
 
 ```typescript
 interface ViewingKeyGrant {
@@ -185,11 +190,12 @@ interface ViewingKeyGrant {
 }
 ```
 
-### Revocation
+### Revocation (conceptual)
 
 Keys can be revoked but previously-viewed data cannot be "un-revealed":
 
 ```typescript
+// Planned compliance-module API (not a shipped SDK export)
 await revokeViewingKey(grantId)
 ```
 
@@ -289,19 +295,19 @@ const auditKey = deriveViewingKey(masterKey, '/audit/2024')
 const taxKey = deriveViewingKey(masterKey, '/tax/quarterly')
 
 // Encrypt transaction for auditor
+// TransactionData = { sender: string, recipient: string, amount: string, timestamp: number }
 const txData = {
-  intentHash: '0x123...',
-  inputAmount: 1000n,
-  outputAmount: 950n,
   sender: '0xabc...',
-  recipient: '0xdef...'
+  recipient: '0xdef...',
+  amount: '1000',
+  timestamp: Date.now(),
 }
 
 const encrypted = encryptForViewing(txData, auditKey)
 
 // Auditor decrypts
 const revealed = decryptWithViewing(encrypted, auditKey)
-console.log(revealed.inputAmount) // 1000n
+console.log(revealed.amount) // "1000"
 ```
 
 ## Trust Model

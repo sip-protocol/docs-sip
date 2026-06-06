@@ -474,7 +474,7 @@ demonstrateBatchProcessing()
 
 ```typescript
 // ❌ Wrong - all at once, may overwhelm
-await Promise.all(many Swaps.map(swap => execute(swap)))
+await Promise.all(manySwaps.map(swap => execute(swap)))
 ```
 
 ```typescript
@@ -532,7 +532,7 @@ await executeWithRetry(() => execute(swap), {
 
 ```typescript
 // ❌ Wrong - blast API with requests
-await Promise.all(1000s.map(s => getQuote(s)))
+await Promise.all(requests.map(s => getQuote(s)))
 ```
 
 ```typescript

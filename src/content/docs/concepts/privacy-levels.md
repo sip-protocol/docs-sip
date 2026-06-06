@@ -103,16 +103,27 @@ Solver view:
 
 Full privacy with selective disclosure for authorized auditors.
 
-```typescript
-const viewingKey = sip.generateViewingKey('/audit')
+COMPLIANT mode requires a viewing key. The `IntentBuilder` covers input/output/privacy, but the viewing key is supplied through `createShieldedIntent` (the function the builder delegates to) via the `viewingKey` field of `CreateIntentParams`:
 
-const intent = await sip
-  .intent()
-  .input('solana', 'SOL', 5_000_000_000n)
-  .output('near', 'NEAR')
-  .privacy(PrivacyLevel.COMPLIANT)
-  .viewingKey(viewingKey)
-  .build()
+```typescript
+import { createShieldedIntent, generateViewingKey, PrivacyLevel } from '@sip-protocol/sdk'
+
+const viewingKey = generateViewingKey('m/0/audit')
+
+const intent = await createShieldedIntent({
+  input: {
+    asset: { chain: 'solana', symbol: 'SOL', address: null, decimals: 9 },
+    amount: 5_000_000_000n,
+  },
+  output: {
+    asset: { chain: 'near', symbol: 'NEAR', address: null, decimals: 24 },
+    minAmount: 0n,
+    maxSlippage: 0.01,
+  },
+  privacy: PrivacyLevel.COMPLIANT,
+  recipientMetaAddress,
+  viewingKey: viewingKey.key,
+})
 ```
 
 ### Visibility
@@ -186,30 +197,44 @@ Once data is committed/hidden, it cannot be revealed without user cooperation.
 
 ## SDK Usage
 
-```typescript
-import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
+`createShieldedIntent` accepts a `CreateIntentParams` object: `{ input, output, privacy, recipientMetaAddress?, viewingKey?, ttl? }`. `input`/`output` carry the asset and amount; the privacy level is set via `privacy`.
 
-const sip = new SIP({ network: 'testnet' })
+```typescript
+import { createShieldedIntent, generateViewingKey, PrivacyLevel } from '@sip-protocol/sdk'
+
+const input = {
+  asset: { chain: 'near', symbol: 'NEAR', address: null, decimals: 24 },
+  amount: 100n,
+}
+const output = {
+  asset: { chain: 'ethereum', symbol: 'ETH', address: null, decimals: 18 },
+  minAmount: 0n,
+  maxSlippage: 0.01,
+}
 
 // Transparent
-const transparent = await sip.createIntent({
-  privacyLevel: PrivacyLevel.TRANSPARENT,
-  sender: '0x...',
-  recipient: '0x...',
-  inputAmount: 100n,
+const transparent = await createShieldedIntent({
+  input,
+  output,
+  privacy: PrivacyLevel.TRANSPARENT,
 })
 
 // Shielded - SDK generates commitments, stealth, proofs
-const shielded = await sip.createIntent({
-  privacyLevel: PrivacyLevel.SHIELDED,
-  inputAmount: 100n,
+const shielded = await createShieldedIntent({
+  input,
+  output,
+  privacy: PrivacyLevel.SHIELDED,
+  recipientMetaAddress,
 })
 
 // Compliant - SDK adds encrypted viewing data
-const compliant = await sip.createIntent({
-  privacyLevel: PrivacyLevel.COMPLIANT,
-  inputAmount: 100n,
-  auditorKeyHash: '0x...',
+const viewingKey = generateViewingKey('m/0/audit')
+const compliant = await createShieldedIntent({
+  input,
+  output,
+  privacy: PrivacyLevel.COMPLIANT,
+  recipientMetaAddress,
+  viewingKey: viewingKey.key,
 })
 ```
 

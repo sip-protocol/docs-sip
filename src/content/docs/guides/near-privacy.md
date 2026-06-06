@@ -55,10 +55,11 @@ import {
 } from '@sip-protocol/sdk'
 
 // Generate meta-address for NEAR (uses ed25519)
+// Returns: { metaAddress, spendingPrivateKey, viewingPrivateKey }
 const metaAddress = generateEd25519StealthMetaAddress('near')
 
-// Encode for sharing
-const encoded = encodeStealthMetaAddress(metaAddress)
+// Encode the public meta-address for sharing
+const encoded = encodeStealthMetaAddress(metaAddress.metaAddress)
 console.log('Share this address:', encoded)
 // Output: sip:near:0x...spendingKey...:0x...viewingKey...
 
@@ -149,10 +150,10 @@ console.log('Ephemeral key:', prepared.stealthAddress?.ephemeralPublicKey)
 Privacy with viewing key for authorized auditors:
 
 ```typescript
-import { createViewingKey, encryptForViewing } from '@sip-protocol/sdk'
+import { generateViewingKey, encryptForViewing } from '@sip-protocol/sdk'
 
-// Create viewing key pair
-const viewingKey = createViewingKey()
+// Create a viewing key (returns { key, path, hash })
+const viewingKey = generateViewingKey('m/0/auditor')
 
 const prepared = await nearAdapter.prepareSwap(
   {
@@ -174,46 +175,57 @@ const encryptedDetails = encryptForViewing(
     amount: '1000000000000000000000000',
     timestamp: Date.now(),
   },
-  viewingKey.publicKey,
+  viewingKey,
 )
 
 // Store encryptedDetails on-chain or in database
-// Auditor can decrypt with viewingKey.privateKey
+// Auditor can decrypt with the same viewingKey (decryptWithViewing)
 ```
 
 ## Scanning for Payments
 
-Recipients scan for incoming stealth payments:
+Recipients scan the chain for incoming stealth payments using
+`getTransactionHistory`, which derives the stealth addresses that belong to
+your viewing key and returns the matching transactions:
 
 ```typescript
 import {
-  scanForStealthPayments,
+  getTransactionHistory,
   deriveStealthPrivateKey,
 } from '@sip-protocol/sdk'
 
-// Scan NEAR chain for payments to your meta-address
-const payments = await scanForStealthPayments({
-  chain: 'near',
-  viewingPrivateKey: myMetaAddress.viewingPrivateKey,
-  spendingPublicKey: myMetaAddress.spendingPublicKey,
-  fromBlock: 100000000, // Start block
+// Scan NEAR for transactions belonging to your keys
+const history = await getTransactionHistory({
+  rpcUrl: 'https://rpc.mainnet.near.org',
+  viewingPrivateKey: metaAddress.viewingPrivateKey,
+  spendingPrivateKey: metaAddress.spendingPrivateKey,
+  network: 'mainnet',
+  limit: 50,
 })
 
-for (const payment of payments) {
+for (const tx of history.transactions) {
   console.log('Found payment:', {
-    amount: payment.amount,
-    txHash: payment.txHash,
-    ephemeralKey: payment.ephemeralPublicKey,
+    amount: tx.amountFormatted,
+    token: tx.token,
+    txHash: tx.hash,
+    ephemeralKey: tx.ephemeralPublicKey,
   })
 
+  // Reconstruct the stealth address from the transaction
+  const stealthAddress = {
+    address: tx.stealthPublicKey,
+    ephemeralPublicKey: tx.ephemeralPublicKey,
+    viewTag: tx.viewTag,
+  }
+
   // Derive the private key to claim this payment
-  const stealthPrivateKey = deriveStealthPrivateKey(
-    myMetaAddress.spendingPrivateKey,
-    myMetaAddress.viewingPrivateKey,
-    payment.ephemeralPublicKey,
+  const recovery = deriveStealthPrivateKey(
+    stealthAddress,
+    metaAddress.spendingPrivateKey,
+    metaAddress.viewingPrivateKey,
   )
 
-  // Use stealthPrivateKey to sign transactions from this address
+  // Use recovery.privateKey to sign transactions from this address
 }
 ```
 
@@ -222,15 +234,16 @@ for (const payment of payments) {
 ### Creating Viewing Keys
 
 ```typescript
-import { createViewingKey } from '@sip-protocol/sdk'
+import { generateViewingKey } from '@sip-protocol/sdk'
 
-const viewingKey = createViewingKey()
+const viewingKey = generateViewingKey('m/0/auditor')
 
-// Public key - share with auditors
-console.log('Auditor key:', viewingKey.publicKey)
+// The viewing key is symmetric — there is no public/private split.
+// Share the whole key with authorized auditors so they can decrypt.
+console.log('Auditor key:', viewingKey.key)
 
-// Private key - keep secure, used for decryption
-console.log('Private key:', viewingKey.privateKey)
+// Hash uniquely identifies which key can decrypt a given payload
+console.log('Key hash:', viewingKey.hash)
 ```
 
 ### Selective Disclosure
@@ -238,38 +251,44 @@ console.log('Private key:', viewingKey.privateKey)
 Share viewing keys for specific transactions:
 
 ```typescript
-import { encryptForViewing, decryptWithViewingKey } from '@sip-protocol/sdk'
+import { encryptForViewing, decryptWithViewing } from '@sip-protocol/sdk'
 
-// Sender encrypts transaction details
+// Sender encrypts transaction details with the auditor's viewing key
 const encrypted = encryptForViewing(
   {
-    txHash: '0x...',
     sender: 'alice.near',
     recipient: 'bob.near',
     amount: '1000000000000000000000000',
-    memo: 'Payment for services',
+    timestamp: Date.now(),
   },
-  auditorPublicKey,
+  viewingKey,
 )
 
-// Auditor decrypts with their private key
-const details = decryptWithViewingKey(encrypted, auditorPrivateKey)
+// Auditor decrypts with the same viewing key
+const details = decryptWithViewing(encrypted, viewingKey)
 console.log('Transaction details:', details)
 ```
 
 ### Time-Limited Access
 
-Create viewing keys with expiry:
+Derive a viewing key that is only valid for a specific time window using
+`createTimeWindowedKey`. The auditor can decrypt payments within the window,
+but the key carries no authority outside `[windowStart, windowEnd]`:
 
 ```typescript
-import { createTimeLimitedViewingKey } from '@sip-protocol/sdk'
+import { createTimeWindowedKey } from '@sip-protocol/sdk'
 
-const tempKey = createTimeLimitedViewingKey({
-  expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-  scope: ['transaction:view'], // Limited permissions
-})
+const now = Math.floor(Date.now() / 1000)
 
-// Key automatically expires after 24 hours
+const windowedKey = createTimeWindowedKey(
+  masterViewingKey.key, // master viewing key (hex)
+  now,                  // window start (Unix seconds)
+  now + 24 * 60 * 60,   // window end — 24 hours later
+)
+
+console.log('Valid from:', windowedKey.windowStart)
+console.log('Valid until:', windowedKey.windowEnd)
+console.log('Epochs covered:', windowedKey.epochs)
 ```
 
 ## NEP-141 Token Privacy

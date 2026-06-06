@@ -36,7 +36,7 @@ try {
   if (error instanceof ValidationError) {
     console.error('Validation failed:', error.message)
     console.error('Field:', error.field)
-    console.error('Details:', error.details)
+    console.error('Context:', error.context)
   }
 }
 
@@ -47,7 +47,7 @@ try {
   if (error instanceof CryptoError) {
     console.error('Crypto operation failed:', error.message)
     console.error('Code:', error.code)
-    console.error('Operation:', error.details?.operation)
+    console.error('Operation:', error.operation)
   }
 }
 
@@ -58,7 +58,7 @@ try {
   if (error instanceof IntentError) {
     console.error('Intent error:', error.message)
     console.error('Code:', error.code)
-    console.error('Intent ID:', error.details?.intentId)
+    console.error('Intent ID:', error.intentId)
   }
 }
 ```
@@ -150,8 +150,8 @@ async function executeWithRetry<T>(
 
       // Check if error is retryable
       const isRetryable =
-        error.code === 'NETWORK_ERROR' ||
-        error.code === 'TIMEOUT' ||
+        error.code === ErrorCode.NETWORK_FAILED ||
+        error.code === ErrorCode.NETWORK_TIMEOUT ||
         (retryableErrors.length > 0 && retryableErrors.includes(error.code))
 
       if (!isRetryable || attempt === maxRetries) {
@@ -192,7 +192,7 @@ const result = await executeWithRetry(
     maxRetries: 3,
     delayMs: 2000,
     backoffMultiplier: 1.5,
-    retryableErrors: [ErrorCode.NETWORK_ERROR],
+    retryableErrors: [ErrorCode.NETWORK_FAILED],
   },
   'execute'
 )
@@ -336,7 +336,7 @@ function determineRecovery(error: any): ErrorRecovery {
   }
 
   // Network error - retry with backoff
-  if (error.code === 'NETWORK_ERROR' || error.code === 'TIMEOUT') {
+  if (error.code === ErrorCode.NETWORK_FAILED || error.code === ErrorCode.NETWORK_TIMEOUT) {
     return {
       shouldRetry: true,
       delay: 2000,
@@ -344,11 +344,11 @@ function determineRecovery(error: any): ErrorRecovery {
     }
   }
 
-  // Insufficient balance - don't retry
-  if (error.code === ErrorCode.INSUFFICIENT_BALANCE) {
+  // Validation failure (e.g. insufficient balance) - don't retry
+  if (error.code === ErrorCode.VALIDATION_FAILED) {
     return {
       shouldRetry: false,
-      userMessage: 'Insufficient balance to complete this swap.',
+      userMessage: 'Validation failed - check balance and inputs before retrying.',
     }
   }
 
@@ -560,7 +560,7 @@ try {
   console.error('Execute failed:', {
     message: error.message,
     code: error.code,
-    details: error.details,
+    context: error.context,
   })
   throw error
 }
@@ -675,4 +675,4 @@ catch (error: any) {
 
 - [Integrate with wallets](/cookbook/09-wallet-integration) with error handling
 - [Test error scenarios](/cookbook/10-testing-mocks) comprehensively
-- Learn about [error codes](/reference/errors) in detail
+- Learn about [error handling patterns](/guides/error-handling/) in detail

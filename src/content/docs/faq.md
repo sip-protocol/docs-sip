@@ -219,10 +219,18 @@ import { SIP, PrivacyLevel } from '@sip-protocol/sdk'
 
 const sip = new SIP({ network: 'mainnet' })
 
-// Create shielded swap
+// Create shielded swap.
+// Amounts are bigint in the asset's smallest unit (1 ETH = 1e18 wei).
 const intent = await sip.createIntent({
-  input: { chain: 'ethereum', token: 'ETH', amount: '1.0' },
-  output: { chain: 'solana', token: 'SOL' },
+  input: {
+    asset: { chain: 'ethereum', symbol: 'ETH', address: null, decimals: 18 },
+    amount: 1_000_000_000_000_000_000n,  // 1 ETH
+  },
+  output: {
+    asset: { chain: 'solana', symbol: 'SOL', address: null, decimals: 9 },
+    minAmount: 0n,        // accept any amount
+    maxSlippage: 0.01,    // 1%
+  },
   privacy: PrivacyLevel.SHIELDED,
 })
 
@@ -230,6 +238,10 @@ const intent = await sip.createIntent({
 const quotes = await sip.getQuotes(intent)
 await sip.execute(intent, quotes[0])
 ```
+
+:::note[Mock quotes by default]
+By default the SDK runs in **demo mode**, so `getQuotes()` returns **mock** quotes for local development. For real solver quotes, configure `mode: 'production'` plus an `intentsAdapter` (mainnet only). See [Quick Start](/getting-started/).
+:::
 
 See [Quick Start](/getting-started/) for complete guide.
 
@@ -254,19 +266,16 @@ Yes. SIP is designed to work with the NEAR Intents solver network. See [Solver I
 
 ### Is there a testnet?
 
-Yes. Use the SDK with testnet configuration:
+Partially. The NEAR Intents (1Click) settlement layer that powers real quotes and swaps is **mainnet only** — there is no testnet swap path. What `network: 'testnet'` gives you is local crypto and wallet testing (stealth addresses, commitments, viewing keys, wallet adapters) against individual chain testnets:
 
 ```typescript
-const sip = new SIP({
-  network: 'testnet',
-  nearNetwork: 'testnet',
-})
+const sip = new SIP({ network: 'testnet' })
 ```
 
-Testnet uses:
-- NEAR testnet
-- Ethereum Sepolia
-- Solana devnet
+Use these for development:
+- **Crypto / wallet testing** — `network: 'testnet'` with chain testnets (NEAR testnet, Ethereum Sepolia, Solana devnet)
+- **Unit tests** — `MockSolver` to simulate quotes and fulfillment without any network
+- **Real quotes / settlement** — require `network: 'mainnet'` + `mode: 'production'` + an `intentsAdapter` (use small amounts for integration testing)
 
 ---
 

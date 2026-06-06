@@ -132,7 +132,7 @@ try {
 
 **Example:**
 ```typescript
-import { NoirProofProvider } from '@sip-protocol/sdk'
+import { NoirProofProvider } from '@sip-protocol/sdk/proofs/noir'
 
 const provider = new NoirProofProvider({ wasmPath: '/noir' })
 
@@ -308,6 +308,9 @@ const quotes = await withExponentialBackoff(() => sip.getQuotes(intent))
 For proof generation failures:
 
 ```typescript
+import { NoirProofProvider } from '@sip-protocol/sdk/proofs/noir'
+import { MockProofProvider } from '@sip-protocol/sdk'
+
 const providers = [
   new NoirProofProvider({ wasmPath: '/noir' }),
   new MockProofProvider(), // Fallback for testing
@@ -382,6 +385,8 @@ const result = await breaker.execute(() => sip.execute(intent, quote))
 For optional features:
 
 ```typescript
+import { NoirProofProvider } from '@sip-protocol/sdk/proofs/noir'
+
 async function createIntent(withProofs = true) {
   const builder = sip.intent()
     .input('solana', 'SOL', 1_000_000_000n)
@@ -393,7 +398,7 @@ async function createIntent(withProofs = true) {
       // Try to generate proofs
       const proofProvider = new NoirProofProvider({ wasmPath: '/noir' })
       await proofProvider.initialize()
-      builder.proofsProvider(proofProvider)
+      builder.withProvider(proofProvider)
     } catch (e) {
       console.warn('Proof generation not available, continuing without proofs:', e)
       // Continue without proofs (for development)
@@ -509,7 +514,7 @@ try {
   await rejectingWallet.connect()
 } catch (e) {
   expect(e).toBeInstanceOf(WalletError)
-  expect(e.walletCode).toBe('WALLET_CONNECTION_REJECTED')
+  expect(e.walletCode).toBe('WALLET_CONNECTION_FAILED')
 }
 
 // Test signing rejection
@@ -522,7 +527,7 @@ try {
   await rejectingWallet2.signMessage(new Uint8Array([1, 2, 3]))
 } catch (e) {
   expect(e).toBeInstanceOf(WalletError)
-  expect(e.walletCode).toBe('WALLET_SIGNING_REJECTED')
+  expect(e.walletCode).toBe('WALLET_SIGNING_FAILED')
 }
 ```
 
@@ -553,10 +558,13 @@ if (balance < intent.inputAmount) {
   })
 }
 
-// 2. Increase slippage tolerance
-const quote = await sip.getQuotes(intent, {
-  slippageTolerance: 100, // 1% (in basis points)
-})
+// 2. Increase slippage tolerance on the intent itself (1% = .slippage(1))
+const intentWithSlippage = await sip.intent()
+  .input('solana', 'SOL', 1_000_000_000n)
+  .output('zcash', 'ZEC', 50_000_000n)
+  .slippage(1) // 1%
+  .build()
+const quote = await sip.getQuotes(intentWithSlippage)
 
 // 3. Check quote expiry
 const now = Math.floor(Date.now() / 1000)
@@ -598,29 +606,23 @@ import {
   generateStealthMetaAddress,
   encodeStealthMetaAddress,
   decodeStealthMetaAddress,
-  validateStealthAddress
 } from '@sip-protocol/sdk'
 
-// ✅ Generate valid stealth address
-const keys = generateStealthMetaAddress()
-const encoded = encodeStealthMetaAddress(keys, 'solana')
+// ✅ Generate valid stealth meta-address (chain is required)
+const keys = generateStealthMetaAddress('solana')
+const encoded = encodeStealthMetaAddress(keys.metaAddress)
 
 // Validate format: sip:solana:<spendingKey>:<viewingKey>
 if (!encoded.startsWith('sip:solana:')) {
   throw new ValidationError('Invalid stealth address format')
 }
 
-// ✅ Decode safely
+// ✅ Decode safely — decodeStealthMetaAddress validates the keys and
+// throws a ValidationError if the format or curve is wrong
 try {
   const decoded = decodeStealthMetaAddress(encoded)
   console.log('Valid stealth address:', decoded)
 } catch (e) {
-  console.error('Invalid stealth address:', e)
-}
-
-// ✅ Use helper function
-const isValid = validateStealthAddress(encoded, 'solana')
-if (!isValid) {
   throw new ValidationError('Invalid stealth address for chain', 'stealthAddress')
 }
 ```
@@ -640,7 +642,8 @@ if (!isValid) {
 **Troubleshooting:**
 
 ```typescript
-import { NoirProofProvider } from '@sip-protocol/sdk'
+import { NoirProofProvider } from '@sip-protocol/sdk/proofs/noir'
+import { commit, generateRandomBytes } from '@sip-protocol/sdk'
 
 const provider = new NoirProofProvider({ wasmPath: '/noir' })
 
@@ -648,16 +651,20 @@ const provider = new NoirProofProvider({ wasmPath: '/noir' })
 await provider.initialize()
 
 // 2. Generate proof with correct parameters
+const balance = 1000n
+const blindingFactor = generateRandomBytes(32) // 32-byte Uint8Array
 const proofResult = await provider.generateFundingProof({
-  balance: 1000n,
+  balance,
   minimumRequired: 100n,
+  blindingFactor, // Use same blinding as commitment
   assetId: 'SOL',
-  blinding: generateBlinding(), // Use same blinding as commitment
+  userAddress: wallet.address,
+  ownershipSignature, // Signature over userAddress
 })
 
 // 3. Verify proof with matching public inputs
 const publicInputs = {
-  commitment: pedersen(balance, blinding), // Must match!
+  commitment: commit(balance, blindingFactor).commitment, // Must match!
   minimumRequired: 100n,
   assetId: 'SOL',
 }
@@ -741,7 +748,7 @@ const signature = await wallet.signMessage(message)
 **Solutions:**
 
 ```typescript
-import { commit, verifyOpening, addCommitments } from '@sip-protocol/sdk'
+import { commit, verifyOpening, addCommitments, addBlindings } from '@sip-protocol/sdk'
 
 // ✅ Store blinding factor with commitment
 const amount = 1000n
@@ -768,9 +775,9 @@ const c1 = commit(100n)
 const c2 = commit(200n)
 const sum = addCommitments(c1.commitment, c2.commitment)
 
-// Verify sum (must use sum of blindings)
-const totalBlinding = (c1.blinding + c2.blinding) % CURVE_ORDER
-verifyOpening(sum, 300n, totalBlinding) // ✅
+// Verify sum (must use sum of blindings — addBlindings sums them mod the curve order)
+const totalBlinding = addBlindings(c1.blinding, c2.blinding)
+verifyOpening(sum.commitment, 300n, totalBlinding) // ✅
 ```
 
 <Aside type="tip">

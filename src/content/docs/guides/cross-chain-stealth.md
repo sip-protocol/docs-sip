@@ -32,17 +32,22 @@ When both chains use the same curve, SIP can automatically generate a stealth re
 ### EVM → EVM Example
 
 ```typescript
-import { createShieldedIntent } from '@sip-protocol/sdk'
+import { createShieldedIntent, PrivacyLevel } from '@sip-protocol/sdk'
 
 // Ethereum to Polygon - both use secp256k1
 const intent = await createShieldedIntent({
-  inputChain: 'ethereum',
-  outputChain: 'polygon',
-  inputAsset: 'ETH',
-  outputAsset: 'MATIC',
-  amount: '1.0',
-  recipient: recipientMetaAddress, // secp256k1 meta-address
-  // senderAddress NOT required - automatically derived
+  input: {
+    asset: { chain: 'ethereum', symbol: 'ETH', address: null, decimals: 18 },
+    amount: 1_000_000_000_000_000_000n, // 1 ETH
+  },
+  output: {
+    asset: { chain: 'polygon', symbol: 'MATIC', address: null, decimals: 18 },
+    minAmount: 0n,
+    maxSlippage: 0.01, // 1%
+  },
+  privacy: PrivacyLevel.SHIELDED,
+  recipientMetaAddress, // secp256k1 meta-address
+  // senderAddress NOT required - automatically derived (same-curve)
 })
 ```
 
@@ -51,13 +56,18 @@ const intent = await createShieldedIntent({
 ```typescript
 // Solana to NEAR - both use ed25519
 const intent = await createShieldedIntent({
-  inputChain: 'solana',
-  outputChain: 'near',
-  inputAsset: 'SOL',
-  outputAsset: 'NEAR',
-  amount: '10.0',
-  recipient: recipientMetaAddress, // ed25519 meta-address
-  // senderAddress NOT required - automatically derived
+  input: {
+    asset: { chain: 'solana', symbol: 'SOL', address: null, decimals: 9 },
+    amount: 10_000_000_000n, // 10 SOL
+  },
+  output: {
+    asset: { chain: 'near', symbol: 'NEAR', address: null, decimals: 24 },
+    minAmount: 0n,
+    maxSlippage: 0.01, // 1%
+  },
+  privacy: PrivacyLevel.SHIELDED,
+  recipientMetaAddress, // ed25519 meta-address
+  // senderAddress NOT required - automatically derived (same-curve)
 })
 ```
 
@@ -73,32 +83,50 @@ When chains use different curves, you **must** provide a `senderAddress` for ref
 
 ```typescript
 // Cross-curve: secp256k1 → ed25519
-// MUST provide senderAddress for refunds
-const intent = await createShieldedIntent({
-  inputChain: 'ethereum',
-  outputChain: 'solana',
-  inputAsset: 'ETH',
-  outputAsset: 'SOL',
-  amount: '1.0',
-  recipient: recipientMetaAddress, // ed25519 meta-address for Solana
-  senderAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD11', // Your Ethereum address for refunds
-})
+// MUST provide senderAddress (in the options arg) for refunds
+const intent = await createShieldedIntent(
+  {
+    input: {
+      asset: { chain: 'ethereum', symbol: 'ETH', address: null, decimals: 18 },
+      amount: 1_000_000_000_000_000_000n, // 1 ETH
+    },
+    output: {
+      asset: { chain: 'solana', symbol: 'SOL', address: null, decimals: 9 },
+      minAmount: 0n,
+      maxSlippage: 0.01, // 1%
+    },
+    privacy: PrivacyLevel.SHIELDED,
+    recipientMetaAddress, // ed25519 meta-address for Solana
+  },
+  {
+    senderAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD11', // Your Ethereum address for refunds
+  },
+)
 ```
 
 ### Solana → EVM Example
 
 ```typescript
 // Cross-curve: ed25519 → secp256k1
-// MUST provide senderAddress for refunds
-const intent = await createShieldedIntent({
-  inputChain: 'solana',
-  outputChain: 'ethereum',
-  inputAsset: 'SOL',
-  outputAsset: 'ETH',
-  amount: '10.0',
-  recipient: recipientMetaAddress, // secp256k1 meta-address for Ethereum
-  senderAddress: 'DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK', // Your Solana address for refunds
-})
+// MUST provide senderAddress (in the options arg) for refunds
+const intent = await createShieldedIntent(
+  {
+    input: {
+      asset: { chain: 'solana', symbol: 'SOL', address: null, decimals: 9 },
+      amount: 10_000_000_000n, // 10 SOL
+    },
+    output: {
+      asset: { chain: 'ethereum', symbol: 'ETH', address: null, decimals: 18 },
+      minAmount: 0n,
+      maxSlippage: 0.01, // 1%
+    },
+    privacy: PrivacyLevel.SHIELDED,
+    recipientMetaAddress, // secp256k1 meta-address for Ethereum
+  },
+  {
+    senderAddress: 'DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK', // Your Solana address for refunds
+  },
+)
 ```
 
 ## Error Messages
@@ -174,12 +202,30 @@ function needsSenderAddress(inputChain: string, outputChain: string): boolean {
 
 Ensure the `senderAddress` matches the input chain's expected format:
 
-```typescript
-import { validateAddress } from '@sip-protocol/sdk'
+The SDK exposes chain-specific validators. Dispatch on the input chain to
+validate the refund address:
 
-// Validates address format for the chain
-const isValid = validateAddress(senderAddress, inputChain)
-if (!isValid) {
+```typescript
+import {
+  isValidSolanaAddress,
+  isValidNearImplicitAddress,
+  isValidNearAccountId,
+} from '@sip-protocol/sdk'
+
+function isValidAddress(address: string, chain: string): boolean {
+  switch (chain) {
+    case 'solana':
+      return isValidSolanaAddress(address)
+    case 'near':
+      // NEAR accepts implicit (64-hex) accounts and named accounts (alice.near)
+      return isValidNearImplicitAddress(address) || isValidNearAccountId(address)
+    default:
+      // EVM chains (ethereum, polygon, arbitrum, base, ...): 0x + 40 hex chars
+      return /^0x[0-9a-fA-F]{40}$/.test(address)
+  }
+}
+
+if (!isValidAddress(senderAddress, inputChain)) {
   throw new Error(`Invalid ${inputChain} address format`)
 }
 ```

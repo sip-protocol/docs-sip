@@ -170,18 +170,18 @@ basicSwap()
 
 ### Pitfall 1: Forgetting to Generate Stealth Keys
 
-**Problem:** Calling `.recipient()` without generating keys first.
+**Problem:** Building a shielded intent without setting a recipient.
 
 ```typescript
-// ❌ Wrong - no stealth keys generated
+// ❌ Wrong - no recipient set
 const intent = await sip.intent()
   .input('solana', 'SOL', 1_000_000_000n)
   .output('zcash', 'ZEC', 50_000_000n)
   .privacy(PrivacyLevel.SHIELDED)
-  .build()  // Error: No recipient for shielded mode
+  .build()  // Builds with a placeholder recipient - real recipient enforced at production getQuotes
 ```
 
-**Solution:** Always generate keys before using shielded mode.
+**Solution:** Always generate keys and set a recipient before using shielded mode.
 
 ```typescript
 // ✅ Correct
@@ -201,8 +201,8 @@ const intent = await sip.intent()
 **Problem:** Passing decimal numbers instead of smallest unit bigints.
 
 ```typescript
-// ❌ Wrong - using decimal SOL
-.input('solana', 'SOL', 1.5)  // Will floor to 1 lamport!
+// ❌ Wrong - the number path always multiplies by 1e18, ignoring token decimals
+.input('solana', 'SOL', 1.5)  // Becomes 1.5 * 1e18, not 1.5 SOL (9 decimals) - off by 1e9
 ```
 
 **Solution:** Always use the smallest unit (lamports, zatoshis, wei, etc.) as bigint.

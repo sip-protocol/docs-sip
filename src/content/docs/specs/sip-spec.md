@@ -54,6 +54,9 @@ interface ShieldedIntent {
 }
 ```
 
+The on-wire `version` field is populated from the SDK's exported `SIP_VERSION` constant,
+whose current value is `'sip-v1'`.
+
 ### Commitment Format
 
 ```typescript
@@ -276,9 +279,10 @@ Constraints:
 | SIP_2002 | Invalid chain |
 | SIP_2003 | Invalid privacy level |
 | SIP_2004 | Invalid amount |
-| SIP_3000 | Crypto operation failed |
-| SIP_4000 | Proof generation failed |
-| SIP_5000 | Network error |
+| SIP_3000 | Cryptographic operation failed |
+| SIP_4000 | Proof failed |
+| SIP_5000 | Intent failed |
+| SIP_6000 | Network error |
 
 ## Version History
 

@@ -13,6 +13,7 @@ The wallet adapter provides a unified interface for interacting with different b
 interface WalletAdapter {
   // Identity
   readonly chain: ChainId
+  readonly name: string
   readonly address: string | null
   readonly connected: boolean
 
@@ -20,8 +21,8 @@ interface WalletAdapter {
   connect(): Promise<void>
   disconnect(): Promise<void>
 
-  // Signing
-  signMessage(message: Uint8Array): Promise<Uint8Array>
+  // Signing — returns a Signature object, not raw bytes
+  signMessage(message: Uint8Array): Promise<Signature>
   signTransaction(transaction: unknown): Promise<unknown>
 
   // Events
@@ -29,6 +30,22 @@ interface WalletAdapter {
   off(event: WalletEvent, handler: EventHandler): void
 }
 ```
+
+`signMessage` resolves to a `Signature` object rather than raw bytes:
+
+```typescript
+interface Signature {
+  signature: HexString    // signature bytes, hex encoded
+  recoveryId?: number     // recovery id for secp256k1
+  publicKey: HexString    // signing public key, hex encoded
+}
+```
+
+:::note
+The SDK ships two related adapter abstractions: the general-purpose `WalletAdapter`
+(exported as `IWalletAdapter`) shown here, and `PrivateWalletAdapter`, which extends it with
+SIP-specific shielded-send helpers. Both return `Signature` from `signMessage`.
+:::
 
 ## Events
 
@@ -109,12 +126,16 @@ await adapter.connect()
 
 ```typescript
 abstract class BaseWalletAdapter implements WalletAdapter {
+  // Subclasses must declare their chain and a human-readable name
+  abstract readonly chain: ChainId
+  abstract readonly name: string
+
   protected state: ConnectionState = 'disconnected'
   protected eventHandlers: Map<WalletEvent, EventHandler[]>
 
   abstract connect(): Promise<void>
   abstract disconnect(): Promise<void>
-  abstract signMessage(message: Uint8Array): Promise<Uint8Array>
+  abstract signMessage(message: Uint8Array): Promise<Signature>
   abstract signTransaction(tx: unknown): Promise<unknown>
 
   emit(event: WalletEvent, data?: unknown): void {
