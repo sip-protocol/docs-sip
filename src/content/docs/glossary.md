@@ -296,13 +296,13 @@ A number used in elliptic curve operations. Private keys and blinding factors ar
 
 ### Scanning
 
-The process of checking transactions to find those addressed to you. Recipients scan using their viewing key to detect incoming payments.
+The process of checking transactions to find those addressed to you. Recipients scan view-only — with the viewing PRIVATE key plus the spending PUBLIC key — never the spending private key (canonical EIP-5564).
 
 ```typescript
 const isForMe = checkStealthAddress(
   stealthAddress,
-  spendingPrivateKey,
-  viewingPrivateKey
+  viewingPrivateKey,
+  metaAddress.spendingKey
 )
 ```
 

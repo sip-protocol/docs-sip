@@ -169,7 +169,7 @@ There is no mathematical transformation to convert a secp256k1 public key into a
 SIP stealth addresses are derived from the meta-address public keys:
 
 ```
-Stealth Address = ViewingKey + hash(SharedSecret) × G
+Stealth Address = SpendingKey + hash(SharedSecret) × G
 ```
 
 Where `G` is the generator point of the specific curve. Using a secp256k1 generator with ed25519 arithmetic (or vice versa) produces invalid addresses.

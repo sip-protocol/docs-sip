@@ -112,21 +112,23 @@ H = tryAndIncrement(H_DOMAIN)
 Recipient publishes: (K_spend, K_view) - stealth meta-address
 Sender generates:    r (ephemeral private key)
                      R = r·G (ephemeral public key)
-                     S = r·K_spend (shared secret via ECDH)
+                     S = r·K_view (shared secret via ECDH)
                      s = H(S) (scalar derivation)
-                     P = K_view + s·G (stealth address)
+                     P = K_spend + s·G (stealth address)
 
-Recipient computes:  S' = k_spend·R (same shared secret)
+Recipient computes:  S' = k_view·R (same shared secret)
                      s' = H(S')
-                     p = k_view + s' (stealth private key)
+                     p = k_spend + s' (stealth private key)
 ```
 
-Consistency: `S = r·K_spend = k_spend·R` (ECDH), and
-`P = K_view + s·G = (k_view + s)·G = p·G`. Deriving the stealth private key
-`p` therefore requires **both** recipient private keys (`k_spend` to recover
-`S`, `k_view` as the base scalar). This matches the implementation in
-`stealth/secp256k1.ts` and the formula `A = Q + H(r·P)·G` in
-[security-properties](/security/security-properties/).
+Consistency: `S = r·K_view = k_view·R` (ECDH on the **viewing** key), and
+`P = K_spend + s·G = (k_spend + s)·G = p·G`. Deriving the stealth private key
+`p` requires **both** recipient private keys (`k_view` to recover `S`, and
+`k_spend` as the base scalar), while **detection needs only `k_view` plus the
+spending public key `K_spend`** — compute `S = k_view·R`, then check whether
+`K_spend + H(S)·G == P`. This matches the implementation in
+`stealth/secp256k1.ts` and the canonical stealth-address formula
+`A = K_spend + H(S)·G` in [security-properties](/security/security-properties/).
 
 ### Security Properties
 

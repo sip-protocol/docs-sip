@@ -133,9 +133,9 @@ const bytes = crypto.getRandomValues(new Uint8Array(32))
 
 - [ ] **File**: `stealth.ts:generateStealthAddress()`
 - [ ] Ephemeral key is fresh random
-- [ ] ECDH performed correctly: S = r·K_spend
+- [ ] ECDH performed correctly: S = r·K_view
 - [ ] Scalar derivation: s = H(S)
-- [ ] Address computation: P = K_view + s·G
+- [ ] Address computation: P = K_spend + s·G
 
 #### 3.3 Address Checking
 
@@ -147,7 +147,7 @@ const bytes = crypto.getRandomValues(new Uint8Array(32))
 #### 3.4 Private Key Recovery
 
 - [ ] **File**: `stealth.ts:deriveStealthPrivateKey()`
-- [ ] Correctly computes: p = k_view + H(k_spend·R)
+- [ ] Correctly computes: p = k_spend + H(k_view·R)
 - [ ] Result matches stealth address public key
 - [ ] No timing variance based on input
 

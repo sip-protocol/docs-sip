@@ -39,19 +39,19 @@ This document describes the formal security properties provided by SIP Protocol'
 
 **Definition**: Stealth addresses derived from the same meta-address are unlinkable to observers without the viewing key.
 
-**Proof Sketch**: Each stealth address A = Q + H(r·P)·G uses fresh ephemeral key r. The shared secret r·P is ECDH output, computationally indistinguishable from random without knowing r or p. Thus A appears as a random curve point.
+**Proof Sketch**: Each stealth address `A = K_spend + H(S)·G` uses a fresh ephemeral key `r`, where the shared secret is the ECDH output `S = r·K_view` (sender) `= k_view·R` (recipient) over the **viewing** key. `S` is computationally indistinguishable from random without knowing `r` or `k_view`, so `A` appears as a random curve point.
 
 ### Recipient Privacy
 
-**Definition**: Given a stealth address A and meta-address (P, Q), no PPT adversary can determine if A was derived from (P, Q) without the viewing key.
+**Definition**: Given a stealth address `A` and meta-address `(K_spend, K_view)`, no PPT adversary can determine if `A` was derived from that meta-address without the viewing private key `k_view` (used to recompute the ECDH shared secret `S = k_view·R`).
 
 **Guarantee**: Follows from DDH assumption on secp256k1.
 
 ### Forward Secrecy
 
-**Property**: Compromise of viewing key doesn't reveal past transactions' spending keys.
+**Property**: Compromise of the viewing key doesn't reveal past transactions' spending keys.
 
-**Mechanism**: Spending key (p) is separate from viewing key (q). Viewing key allows scanning but not spending.
+**Mechanism**: The spending private key `k_spend` is separate from the viewing private key `k_view`. The viewing key allows scanning/detection (recompute `S = k_view·R`, check `K_spend + H(S)·G == A`) but **not** spending — the stealth private key `p = k_spend + H(S)` additionally requires `k_spend`.
 
 ### View Tag Security
 
