@@ -44,58 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.9.0] - 2026-02-27
-
-### Added - M18: Ethereum Same-Chain Privacy (Foundation)
-
-#### EVM Privacy
-- Ethereum stealth-address scanning and stealth-matching (secp256k1, EIP-5564)
-- End-to-end EVM privacy test coverage
-
-#### Solidity Contracts
-- **SIPPrivacy**, **ZKVerifier**, **PedersenVerifier**, **StealthAddressRegistry** deployed to Sepolia, Arbitrum Sepolia, Base Sepolia, and OP Sepolia
-- 105+ Foundry tests covering the contract suite
-
-## [0.8.0] - 2026-02-22
-
-### Added - M16-M17: Same-Chain Privacy (Solana + NEAR)
-
-#### Solana Same-Chain
-- `shieldedTransfer` API for the SIP Privacy Anchor program
-- Native SPL shielded transfers, stealth scanning (Helius), and same-chain executors
-- Solana RPC client migrated to `@solana/kit`
-- Sunspot ZK-verifier pipeline (Noir → Solana)
-- **SIP Privacy program deployed to Solana mainnet-beta**
-
-#### NEAR Same-Chain
-- NEAR stealth addresses, Pedersen commitments, viewing keys, and transaction history
-
-#### Privacy Infrastructure
-- C-SPL confidential SPL token support (`CSPLClient`, `CSPLTokenService`)
-- Network privacy layer (Tor / SOCKS5) for RPC
-- Winternitz vault integration (quantum-resistant storage)
-- Push-based payment webhooks
-
-> M16 (narrative) and M17 (Solana + NEAR same-chain privacy) complete.
-
-## [0.7.0] - 2025-12-05
-
-### Added - M15: Application Layer
-
-#### Hardware Wallets
-- Ledger and Trezor wallet adapters (WebUSB / WebHID / WebBluetooth transports)
-- WalletConnect integration
-
-#### Surveillance & Privacy Scoring (0.7.3)
-- `SurveillanceAnalyzer` — address-reuse, clustering, exchange-exposure, and temporal-pattern analysis with privacy scoring
-
-#### Production Hardening
-- Sentry + Prometheus monitoring in the API package
-- Structured logging, security, and DX improvements
-- High-precision values via Field types in Noir circuits
-
----
-
 ## [0.6.0] - 2025-12-03
 
 ### Added - M14: Developer Experience
@@ -316,9 +264,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Milestone | Highlights |
 |---------|------|-----------|------------|
-| 0.9.0 | 2026-02-27 | M18 | Ethereum same-chain privacy, Solidity contracts, 105+ Foundry tests |
-| 0.8.0 | 2026-02-22 | M16-M17 | Solana + NEAR same-chain privacy, mainnet-beta, C-SPL, Tor/SOCKS5 |
-| 0.7.0 | 2025-12-05 | M15 | Hardware wallets, WalletConnect, surveillance scoring, monitoring |
 | 0.6.0 | 2025-12-03 | M14 | React hooks, CLI, REST API, docs |
 | 0.5.1 | 2025-12-03 | Bugfix | CI test fix, TypeScript build fix |
 | 0.5.0 | 2025-12-03 | M13 | Compliance, threshold keys, enterprise |
