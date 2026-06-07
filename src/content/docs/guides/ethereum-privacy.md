@@ -143,10 +143,11 @@ for (const ann of announcements) {
   }
 
   // Full check: does this stealth address belong to us?
+  // View-only — viewing PRIVATE key + spending PUBLIC key (canonical EIP-5564)
   const isMine = checkStealthAddress(
     stealthAddress,
-    myMetaAddress.spendingPrivateKey,
     myMetaAddress.viewingPrivateKey,
+    myMetaAddress.metaAddress.spendingKey,
   )
   if (!isMine) continue
 

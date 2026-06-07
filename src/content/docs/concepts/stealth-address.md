@@ -115,11 +115,12 @@ const { stealthAddress, ephemeralPublicKey } =
 ### Step 3: Recipient Scans and Claims
 
 ```typescript
-// Recipient scans for their transactions
+// Recipient scans for their transactions (view-only:
+// viewing PRIVATE key + spending PUBLIC key, per canonical EIP-5564)
 const isMine = checkStealthAddress(
   stealthAddress,
-  spendingPrivateKey,
-  viewingPrivateKey
+  viewingPrivateKey,
+  metaAddress.spendingKey
 )
 
 if (isMine) {
@@ -153,25 +154,25 @@ KeyGen():
 GenerateStealth(P, Q):
   1. r ← random_scalar()     // Ephemeral private
   2. R ← r · G               // Ephemeral public
-  3. S ← r · P               // Shared secret (ECDH)
+  3. S ← r · Q               // Shared secret (ECDH on viewing key)
   4. h ← SHA256(S)           // Hash shared secret
   5. view_tag ← h[0]         // First byte (optimization)
-  6. A ← Q + h · G           // Stealth address
+  6. A ← P + h · G           // Stealth address (on spending key)
   Return: (A, R, view_tag)
 ```
 
 ### Scanning
 
 ```
-ScanForStealth(R, A, view_tag, p, q):
-  1. S' ← p · R              // Recompute shared secret
+ScanForStealth(R, A, view_tag, q, P):
+  1. S' ← q · R              // Recompute shared secret (viewing PRIVATE key)
   2. h' ← SHA256(S')
 
   // Quick reject using view tag
   3. if h'[0] ≠ view_tag: return NOT_MINE
 
-  // Full verification
-  4. A' ← Q + h' · G
+  // Full verification (spending PUBLIC key — no spending private key needed)
+  4. A' ← P + h' · G
   5. if A' ≠ A: return NOT_MINE
   Return: MINE
 ```
@@ -180,9 +181,9 @@ ScanForStealth(R, A, view_tag, p, q):
 
 ```
 DerivePrivateKey(R, p, q):
-  1. S ← p · R
+  1. S ← q · R               // Recompute shared secret (viewing PRIVATE key)
   2. h ← SHA256(S)
-  3. a ← q + h (mod n)       // Stealth private key
+  3. a ← p + h (mod n)       // Stealth private key (needs spending PRIVATE key)
   Return: a
 ```
 
@@ -273,11 +274,11 @@ const decoded = decodeStealthMetaAddress(encoded)
 const { stealthAddress, ephemeralPublicKey } =
   generateStealthAddress(decoded)
 
-// Recipient scans
+// Recipient scans (view-only: viewing PRIVATE key + spending PUBLIC key)
 const isMine = checkStealthAddress(
   stealthAddress,
-  meta.spendingPrivateKey,
-  meta.viewingPrivateKey
+  meta.viewingPrivateKey,
+  meta.metaAddress.spendingKey
 )
 
 // Recipient claims

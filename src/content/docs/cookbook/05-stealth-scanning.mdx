@@ -63,11 +63,12 @@ const incomingStealthAddresses: StealthAddress[] = [
 const myPayments: StealthAddress[] = []
 
 for (const stealthAddr of incomingStealthAddresses) {
-  // Check if this payment is for you
+  // Check if this payment is for you (view-only: viewing PRIVATE key +
+  // spending PUBLIC key, per canonical EIP-5564)
   const isMine = checkStealthAddress(
     stealthAddr,
-    myKeys.spendingPrivateKey,
-    myKeys.viewingPrivateKey
+    myKeys.viewingPrivateKey,
+    myKeys.metaAddress.spendingKey
   )
 
   if (isMine) {
@@ -116,20 +117,22 @@ for (const payment of myPayments) {
 Use view tags to quickly filter out payments that aren't for you:
 
 ```typescript
+// Scanning is view-only — the scanner needs the viewing PRIVATE key and the
+// spending PUBLIC key only, never the spending private key (canonical EIP-5564).
 interface OptimizedStealthScanner {
   ownKeys: {
-    spendingPrivateKey: string
     viewingPrivateKey: string
+    spendingPublicKey: string
   }
   scanned: number
   found: number
 }
 
-function createScanner(spendingPriv: string, viewingPriv: string): OptimizedStealthScanner {
+function createScanner(viewingPriv: string, spendingPub: string): OptimizedStealthScanner {
   return {
     ownKeys: {
-      spendingPrivateKey: spendingPriv,
       viewingPrivateKey: viewingPriv,
+      spendingPublicKey: spendingPub,
     },
     scanned: 0,
     found: 0,
@@ -152,8 +155,8 @@ async function efficientScan(
 
     const isMine = checkStealthAddress(
       addr,
-      scanner.ownKeys.spendingPrivateKey,
-      scanner.ownKeys.viewingPrivateKey
+      scanner.ownKeys.viewingPrivateKey,
+      scanner.ownKeys.spendingPublicKey
     )
 
     if (isMine) {
@@ -171,7 +174,7 @@ async function efficientScan(
 }
 
 // Usage
-const scanner = createScanner(myKeys.spendingPrivateKey, myKeys.viewingPrivateKey)
+const scanner = createScanner(myKeys.viewingPrivateKey, myKeys.metaAddress.spendingKey)
 const payments = await efficientScan(scanner, incomingStealthAddresses)
 console.log(`Scan complete: ${scanner.found}/${scanner.scanned} payments found`)
 ```
@@ -205,8 +208,8 @@ async function monitorForPayments(monitor: PaymentMonitor) {
     for (const addr of newAddresses) {
       const isMine = checkStealthAddress(
         addr,
-        monitor.scanner.ownKeys.spendingPrivateKey,
-        monitor.scanner.ownKeys.viewingPrivateKey
+        monitor.scanner.ownKeys.viewingPrivateKey,
+        monitor.scanner.ownKeys.spendingPublicKey
       )
 
       if (isMine) {
@@ -224,7 +227,7 @@ async function monitorForPayments(monitor: PaymentMonitor) {
 
 // Usage
 const paymentMonitor: PaymentMonitor = {
-  scanner: createScanner(myKeys.spendingPrivateKey, myKeys.viewingPrivateKey),
+  scanner: createScanner(myKeys.viewingPrivateKey, myKeys.metaAddress.spendingKey),
   lastScannedBlock: 1000000,
   onPaymentFound: (payment) => {
     console.log('Payment found:', payment.address)
@@ -273,11 +276,12 @@ class StealthWallet {
     let newPayments = 0
 
     for (const addr of stealthAddresses) {
-      // Check if this payment is for us
+      // Check if this payment is for us (view-only: viewing PRIVATE key +
+      // spending PUBLIC key, per canonical EIP-5564)
       const isMine = checkStealthAddress(
         addr,
-        this.spendingPrivateKey,
-        this.viewingPrivateKey
+        this.viewingPrivateKey,
+        this.metaAddress.spendingKey
       )
 
       if (!isMine) continue
@@ -402,7 +406,7 @@ await secureVault.store('stealth-keys', {
 ```typescript
 // ❌ Wrong - expensive full check for every address
 for (const addr of allAddresses) {
-  const isMine = checkStealthAddress(addr, spending, viewing)
+  const isMine = checkStealthAddress(addr, viewingPrivateKey, spendingPublicKey)
   // Full computation every time
 }
 ```
@@ -410,9 +414,10 @@ for (const addr of allAddresses) {
 **Solution:** checkStealthAddress already uses view tags internally for optimization. Just use it correctly.
 
 ```typescript
-// ✅ Correct - view tag optimization built-in
+// ✅ Correct - view tag optimization built-in (view-only: viewing PRIVATE
+// key + spending PUBLIC key)
 for (const addr of allAddresses) {
-  const isMine = checkStealthAddress(addr, spending, viewing)
+  const isMine = checkStealthAddress(addr, viewingPrivateKey, spendingPublicKey)
   // View tag checked first (fast rejection)
 }
 ```
