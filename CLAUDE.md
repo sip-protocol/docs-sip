@@ -11,7 +11,7 @@
 
 **Status:** M17 Complete | M18 Active (Ethereum Same-Chain)
 **Strategy:** Same-chain expansion - documentation for multi-chain same-chain privacy
-**SDK Version:** 0.7.3 (ensure docs reference current version)
+**SDK Version:** 0.11.1 (ensure docs reference current version)
 
 ### Phase 4 Documentation Priorities
 
@@ -31,8 +31,8 @@
 
 ## Quick Reference
 
-**Tech Stack:** Astro 5, Starlight, MDX
-**Deployment:** docs.sip-protocol.org (Docker + GHCR)
+**Tech Stack:** Astro 6, Starlight, MDX
+**Deployment:** docs.sip-protocol.org (Vercel — Git auto-deploy; migrated off VPS 2026-05-31)
 
 **Key Commands:**
 ```bash
@@ -147,4 +147,4 @@ Spec for the original mirror: [`sipher/docs/superpowers/specs/2026-05-04-sentine
 
 ---
 
-**Last Updated:** 2026-01-25
+**Last Updated:** 2026-06-12
