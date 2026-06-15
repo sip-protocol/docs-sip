@@ -15,15 +15,15 @@
     "docs:api:clean": "rm -rf src/content/docs/reference && npm run docs:api"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.39.3",
+    "@astrojs/starlight": "^0.40.0",
     "astro": "^6.4.3",
     "mermaid": "^11.15.0",
-    "playwright": "^1.60.0",
+    "playwright": "^1.61.0",
     "rehype-mermaid": "^3.0.0",
-    "sharp": "^0.34.2"
+    "sharp": "^0.35.1"
   },
   "devDependencies": {
-    "@sip-protocol/sdk": "^0.11.1",
+    "@sip-protocol/sdk": "^0.12.0",
     "@sip-protocol/types": "^0.2.1",
     "typedoc": "^0.28.16",
     "typedoc-plugin-markdown": "^4.4.0"
