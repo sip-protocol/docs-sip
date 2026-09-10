@@ -6,7 +6,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0 # paused — sip-protocol dev freeze; restore to 10 when development resumes
     groups:
       minor-and-patch:
         update-types:
@@ -19,3 +19,4 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    open-pull-requests-limit: 0 # paused — sip-protocol dev freeze
