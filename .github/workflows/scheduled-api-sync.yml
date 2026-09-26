@@ -79,7 +79,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
+          git checkout -B "$BRANCH"
           git add package.json package-lock.json
           git diff --staged --quiet && echo "No changes" && exit 0
           git commit -m "chore: bump @sip-protocol/sdk to $LATEST"
@@ -97,7 +97,7 @@ jobs:
           LATEST=${{ steps.update.outputs.version }}
           BRANCH=${{ steps.update.outputs.branch }}
 
-          # Check if PR already exists for this branch
+          # Check if an open PR already exists for this branch
           EXISTING=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
           if [ -n "$EXISTING" ]; then
             echo "PR #$EXISTING already exists for $BRANCH"
@@ -107,7 +107,9 @@ jobs:
           # A MERGED PR for this head cannot be reopened — gh pr create
           # auto-attempts reopenPullRequest and hard-fails (run 36094992679).
           # When the previous sync PR was merged, push a dated clone of the
-          # branch so a fresh PR is created instead.
+          # branch so a fresh PR is created instead. Checked FIRST: gh pr
+          # list --state closed also matches merged PRs, so the CLOSED
+          # guard below must not see a merged PR.
           MERGED=$(gh pr list --state merged --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
           if [ -n "$MERGED" ]; then
             BRANCH="$BRANCH-r$(date -u +%Y%m%d%H%M%S)"
@@ -115,9 +117,20 @@ jobs:
             echo "Previous PR #$MERGED was merged; using fresh branch $BRANCH"
           fi
 
+          # A closed (unmerged) PR for the same head branch blocks gh pr create
+          # forever. This job only runs when the bump is still applicable
+          # (main's pin differs from npm latest), so reopen it against the
+          # freshly pushed branch instead of failing.
+          CLOSED=$(gh pr list --state closed --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$CLOSED" ]; then
+            echo "Reopening closed PR #$CLOSED for $BRANCH (bump still applicable)"
+            gh pr reopen "$CLOSED"
+            exit 0
+          fi
+
           gh pr create \
             --title "chore: bump @sip-protocol/sdk to $LATEST" \
-            --body "Automated SDK version bump from scheduled sync. Merging will trigger deploy-vps.yml to rebuild and deploy docs." \
+            --body "Automated SDK version bump from scheduled sync. Merging deploys the rebuilt docs to production via Vercel." \
             --base main \
             --head "$BRANCH"
 
