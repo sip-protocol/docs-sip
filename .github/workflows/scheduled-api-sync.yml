@@ -83,7 +83,11 @@ jobs:
           git add package.json package-lock.json
           git diff --staged --quiet && echo "No changes" && exit 0
           git commit -m "chore: bump @sip-protocol/sdk to $LATEST"
-          git push origin "$BRANCH"
+          # Bot-owned branch: always replace the remote state. A previous
+          # run may have pushed a diverged commit (its create-pr step can
+          # fail after the push), and a plain push would be rejected
+          # non-fast-forward on the fresh checkout.
+          git push --force origin "$BRANCH"
 
       - name: Create PR
         if: success()
