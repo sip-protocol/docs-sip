@@ -83,10 +83,10 @@ jobs:
           git add package.json package-lock.json
           git diff --staged --quiet && echo "No changes" && exit 0
           git commit -m "chore: bump @sip-protocol/sdk to $LATEST"
-          # This branch is bot-owned and may already exist on the remote from a
-          # previous run (diverged from main after newer commits landed). A
-          # plain push is rejected non-fast-forward in that case, which has
-          # wedged this workflow. Always replace the remote branch.
+          # Bot-owned branch: always replace the remote state. A previous
+          # run may have pushed a diverged commit (its create-pr step can
+          # fail after the push), and a plain push would be rejected
+          # non-fast-forward on the fresh checkout.
           git push --force origin "$BRANCH"
 
       - name: Create PR
@@ -102,6 +102,19 @@ jobs:
           if [ -n "$EXISTING" ]; then
             echo "PR #$EXISTING already exists for $BRANCH"
             exit 0
+          fi
+
+          # A MERGED PR for this head cannot be reopened — gh pr create
+          # auto-attempts reopenPullRequest and hard-fails (run 36094992679).
+          # When the previous sync PR was merged, push a dated clone of the
+          # branch so a fresh PR is created instead. Checked FIRST: gh pr
+          # list --state closed also matches merged PRs, so the CLOSED
+          # guard below must not see a merged PR.
+          MERGED=$(gh pr list --state merged --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$MERGED" ]; then
+            BRANCH="$BRANCH-r$(date -u +%Y%m%d%H%M%S)"
+            git push origin "HEAD:$BRANCH"
+            echo "Previous PR #$MERGED was merged; using fresh branch $BRANCH"
           fi
 
           # A closed (unmerged) PR for the same head branch blocks gh pr create
