@@ -100,6 +100,17 @@ jobs:
             exit 0
           fi
 
+          # A MERGED PR for this head cannot be reopened — gh pr create
+          # auto-attempts reopenPullRequest and hard-fails (run 36094992679).
+          # When the previous sync PR was merged, push a dated clone of the
+          # branch so a fresh PR is created instead.
+          MERGED=$(gh pr list --state merged --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$MERGED" ]; then
+            BRANCH="$BRANCH-r$(date -u +%Y%m%d%H%M%S)"
+            git push origin "HEAD:$BRANCH"
+            echo "Previous PR #$MERGED was merged; using fresh branch $BRANCH"
+          fi
+
           gh pr create \
             --title "chore: bump @sip-protocol/sdk to $LATEST" \
             --body "Automated SDK version bump from scheduled sync. Merging will trigger deploy-vps.yml to rebuild and deploy docs." \
